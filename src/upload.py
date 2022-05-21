@@ -1,41 +1,41 @@
 import argparse
-
+from socket import socket, AF_INET, SOCK_DGRAM
+from lib.rdtsocket import RDTsocket
+import logging
 
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
 
-    required = parser.add_argument_group('required arguments')
-    required.add_argument(
+    optionals = parser.add_argument_group('optional arguments')
+    optionals.add_argument(
         '-H',
         '--host',
         type=str,
-        required=True,
         metavar='',
+        default='',
         help='server IP address')
-    required.add_argument(
+    optionals.add_argument(
         '-p',
         '--port',
         type=int,
-        required=True,
         metavar='',
+        default=5050,
         help='server port')
-    required.add_argument(
+    optionals.add_argument(
         '-s',
         '--src',
         type=str,
-        required=True,
         metavar='',
+        default='',
         help='source file path')
-    required.add_argument(
+    optionals.add_argument(
         '-n',
         '--name',
         type=str,
-        required=True,
         metavar='',
+        default='file',
         help='file name')
-
-    optionals = parser.add_argument_group('optional arguments')
 
     group = optionals.add_mutually_exclusive_group()
     group.add_argument(
@@ -59,21 +59,12 @@ def getArgs():
 
     return parser.parse_args()
 
-
 args = getArgs()
-print(args.host)
-"""
 
-> python upload -h
-usage : upload [ - h ] [ - v | -q ] [ - H ADDR ] [ - p PORT ] [ - s FILEPATH ] [ - n FILENAME ]
-< command description >
-optional arguments :
--h , -- help show this help message and exit
--v , -- verbose increase output verbosity
--q , -- quiet decrease output verbosity
--H , -- host server IP address
--p , -- port server port
--s , -- src source file path
--n , -- name file name
+logging.basicConfig(level=logging.DEBUG, filename="client.log",
+                    format='%(asctime)s [%(levelname)s]: %(message)s',
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
 
-"""
+clientSocket = RDTsocket()
+clientSocket.connect((args.host, args.port))
+clientSocket.close()

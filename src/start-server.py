@@ -1,35 +1,34 @@
 import argparse
 import pathlib
-
+from lib.rdtsocket import RDTsocket
+import logging
 
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
 
-    required = parser.add_argument_group('required arguments')
-    required.add_argument(
+    optionals = parser.add_argument_group('optional arguments')
+    optionals.add_argument(
         '-H',
         '--host',
         type=str,
-        required=True,
         metavar='',
+        default='',
         help='service IP address')
-    required.add_argument(
+    optionals.add_argument(
         '-p',
         '--port',
         type=int,
-        required=True,
+        default=5050,
         metavar='',
         help='server port')
-    required.add_argument(
+    optionals.add_argument(
         '-s',
         '--storage',
         type=pathlib.Path,
-        required=True,
         metavar='',
+        default='tmp',
         help='storage dir path')
-
-    optionals = parser.add_argument_group('optional arguments')
 
     group = optionals.add_mutually_exclusive_group()
     group.add_argument(
@@ -53,19 +52,22 @@ def getArgs():
 
     return parser.parse_args()
 
-
 args = getArgs()
-print(args.host)
 
-"""
-> python start - server -h
-usage : start - server [ - h ] [ - v | -q ] [ - H ADDR ] [ - p PORT ] [- s DIRPATH ]
-< command description >
-optional arguments :
--h , -- help show this help message and exit
--v , -- verbose increase output verbosity
--q , -- quiet decrease output verbosity
--H , -- host service IP address
--p , -- port service port
--s , -- storage storage dir path
-"""
+logging.basicConfig(level=logging.DEBUG, filename="server.log",
+                    format='%(asctime)s [%(levelname)s]: %(message)s',
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
+
+serverSocket = RDTsocket()
+serverSocket.bind((args.host, args.port))
+serverSocket.listen(1)
+logging.debug("Server listening on port {0}".format(args.port))
+connectionSocket, addr = serverSocket.accept()
+print("socket accepted with addr:", addr)
+
+connectionSocket.close()
+serverSocket.close()
+
+
+
+
