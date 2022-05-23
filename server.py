@@ -12,8 +12,10 @@ serverSocket = TCPSocket()
 serverSocket.bind(('', SERVER_PORT))
 serverSocket.listen(1)
 logging.debug("Server listening on port {0}".format(SERVER_PORT))
-connectionSocket, addr = serverSocket.accept()
-print("socket accepted with addr:", addr)
 
-connectionSocket.close()
+while True:
+    connectionSocket, addr = serverSocket.accept()
+    print("socket accepted with addr:", addr)
+    connectionSocket.close()
+
 serverSocket.close()
