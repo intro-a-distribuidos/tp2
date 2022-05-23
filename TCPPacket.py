@@ -1,6 +1,4 @@
 
-from termios import ECHOE
-
 """
     Esta clase es un borrador, creo que no tiene sentido crear una clase por paquete.
 """
