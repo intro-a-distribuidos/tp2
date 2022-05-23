@@ -15,7 +15,8 @@ class TCPSocket:
 
     socket = None  # Underlying UDP socket
     listening = False
-    acceptedConnections = []  # Lista de sockets en espera
+    unconfirmedConnections = {}  # Conexiones que no completaron el twh
+    unacceptedConnections = {}  # Mapa de sockets en espera
 
     def __init__(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
@@ -61,35 +62,38 @@ class TCPSocket:
         crea un hilo donde se queda escuchando a nuevos clientes.
     """
     def listen(self, maxQueuedConnections):
-        listening_thread = Thread(target=self.listen_thread, 
-                                  args=(maxQueuedConnections,))
-        listening_thread.daemon = True  # Closes with the main thread
+        listeningThread = Thread(target=self.listenThread, 
+                                 args=(maxQueuedConnections,))
+        listeningThread.daemon = True  # Closes with the main thread
         self.listening = True
         logging.debug("Listening...")
-        listening_thread.start()
+        listeningThread.start()
         logging.debug("Finished listening")
 
     """
         Se ejecuta del lado del servidor,
-        realiza el three way handshake con el cliente, crea un socket nuevo para la conexión y lo coloca en la lista acceptedConnections[].
+        realiza el three way handshake con el cliente y crea un socket nuevo para la conexión.
+
+        Si recibe un mensaje "SYN" crea un socket en unconfirmedConnections,
+        Si recibe un mensaje "ACK", elimina el socket de unconfirmedConnections y lo agrega a unacceptedConnections.
     """
-    def listen_thread(self, maxQueuedConnections):
+    def listenThread(self, maxQueuedConnections):
+        # si está llena acceptedConnections deberíamos quedarnos en un while esperando que se vacíe, no hacer otra cosa
         while(self.listening):
-            message, address = self.socket.recvfrom(MSS)
-            if(message.decode() == "SYN"):
+            data, address = self.socket.recvfrom(MSS)
+            if(self.twhIsSYN(data) and address not in self.unconfirmedConnections):
+                if(self.getAmountOfPendingConnections() >= maxQueuedConnections):  
+                    continue  #Descarto las solicitudes de conexiones
+                newConnection = self.createConnection(address)
+                self.unconfirmedConnections[newConnection.getDestinationAddress()] = newConnection
+                self.socket.sendto(("SYN ACK" + str(newConnection.srcPort)).encode(), address)
                 print("Requested connection from:", address[0], ":", address[1])
-                if(len(self.acceptedConnections) < maxQueuedConnections): #TODO: mover esto más arriba
-                    newConnection = self.createConnection(address)
-                    self.acceptedConnections.append(newConnection)
-                    self.socket.sendto(("SYN ACK" + str(newConnection.srcPort)).encode(), address)
-                    message2, address2 = self.socket.recvfrom(MSS)
-                    print("Received 2nd msg from:", address[0], ":", address[1])
-                    if(message2.decode() == "ACK"):
-                        print("Three way handshake completed with client:", address2[0], ":", address2[1])
-                else:
-                    print("Error while doing TWH")
-            else:
-                print("Received unwanted message:", message.decode())
+            elif(self.twhIsACK(data) and address in self.unconfirmedConnections):
+                clientSocket = self.unconfirmedConnections[address]
+                self.unacceptedConnections[address] = clientSocket
+                del self.unconfirmedConnections[address]
+                print("Three way handshake completed with client:", address[0], ":", address[1])
+                # TODO: self.awakeAccept()
 
     """
         Lo ejecuta el servidor para crear un socket nuevo para la comunicación con el cliente
@@ -100,20 +104,29 @@ class TCPSocket:
         newConnection.setDestinationAddress(address)
         return newConnection
 
+    def twhIsSYN(self, data):
+        return data.decode() == "SYN"
+
+    def twhIsACK(self, data):
+        return data.decode() == "ACK"
+
     def getDestinationAddress(self):
         return (self.destIP, self.destPort)
 
+    def getAmountOfPendingConnections(self):
+        return len(self.unconfirmedConnections) + len(self.unacceptedConnections)
+
     """
-        Poppea el primer socket de la lista acceptedConnections[],
+        Poppea el primer socket de la lista unacceptedConnections[],
         si la lista está vacía, bloquea el hilo de ejecución hasta que haya un socket disponible.
     """
     def accept(self):
         logging.debug("Waiting for new connections")
-        while((not self.acceptedConnections)):
+        while((not self.unacceptedConnections)):
             time.sleep(0.2)
         logging.debug("Accepted connection")
-        connection = self.acceptedConnections.pop(0)
-        addr = connection.getDestinationAddress()
+        addr, connection = next(iter(self.unacceptedConnections.items()))  #Obtengo primer key value pair en el diccionario
+        del self.unacceptedConnections[addr]
         return (connection, addr)
 
     def recv(self, bufsize):
