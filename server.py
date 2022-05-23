@@ -1,4 +1,4 @@
-from TCPSocket import TCPSocket
+from RDTSocket import RDTSocket
 import logging
 import time
 
@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.DEBUG, filename="server.log",
 
 SERVER_PORT = 12000
 
-serverSocket = TCPSocket()
+serverSocket = RDTSocket()
 serverSocket.bind(('', SERVER_PORT))
 serverSocket.listen(1)
 logging.debug("Server listening on port {0}".format(SERVER_PORT))

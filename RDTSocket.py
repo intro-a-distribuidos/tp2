@@ -6,7 +6,7 @@ from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
 MSS = 1200
 
 
-class TCPSocket:
+class RDTSocket:
     # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
     srcIP = ''  # Default source addr
     srcPort = 0  # Default source port
@@ -83,7 +83,7 @@ class TCPSocket:
             data, address = self.socket.recvfrom(MSS)
             if(self.twhIsSYN(data) and address not in self.unconfirmedConnections):
                 if(self.getAmountOfPendingConnections() >= maxQueuedConnections):  
-                    continue  #Descarto las solicitudes de conexiones
+                    continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
                 newConnection = self.createConnection(address)
                 self.unconfirmedConnections[newConnection.getDestinationAddress()] = newConnection
                 self.socket.sendto(("SYN ACK" + str(newConnection.srcPort)).encode(), address)
@@ -99,7 +99,7 @@ class TCPSocket:
         Lo ejecuta el servidor para crear un socket nuevo para la comunicación con el cliente
     """
     def createConnection(self, address):
-        newConnection = TCPSocket()
+        newConnection = RDTSocket()
         newConnection.bind(('', 0))
         newConnection.setDestinationAddress(address)
         return newConnection
