@@ -1,9 +1,12 @@
 import time
 import logging
+import random
 from threading import Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
+from RDTPacket import RDTPacket
+from sys import getsizeof
 
-MSS = 1200
+MSS = 1500
 
 
 class RDTSocket:
@@ -13,6 +16,8 @@ class RDTSocket:
     destIP = None
     destPort = None
 
+    seqNum = 0
+    ackNum = 0
     socket = None  # Underlying UDP socket
     listening = False
     unconfirmedConnections = {}  # Conexiones que no completaron el twh
@@ -20,6 +25,8 @@ class RDTSocket:
 
     def __init__(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.seqNum = random.randint(0, 1000)
+        print("Initial sequence number: {}".format(self.seqNum))
 
     """
         Se usa cuando se crea un socket en el servidor, 
@@ -35,13 +42,18 @@ class RDTSocket:
     """
     def connect(self, destAddr):
         self.destIP, self.destPort = destAddr
-        self.send("SYN".encode())
-        data, addr = self.recv(MSS)  # receive SYN ACK
 
-        if(data.decode().startswith("SYN ACK") and addr[0] == self.destIP):
-            print(data.decode())
-            self.send("ACK".encode())
-            self.destPort = int(data.decode()[7:])  # El cliente ahora apunta al socket especifico de la conexión en vez de al listen
+        print("Envío client_isn num: {}".format(self.seqNum))
+        synPacket = RDTPacket.makeSYNPacket(self.seqNum)
+        self.send(synPacket.serialize())
+        synAckPacket, addr = self.recv(MSS)  # receive SYN ACK
+
+        if(synAckPacket.isSYNACK() and addr[0] == self.destIP):
+            self.ackNum = synAckPacket.seqNum + 1
+            print("Envío client_ack num: {}".format(self.ackNum))
+            ackPacket = RDTPacket.makeACKPacket(self.ackNum)
+            self.send(ackPacket.serialize())
+            self.destPort = int(synAckPacket.data.decode().rstrip('\x00'))  # El cliente ahora apunta al socket especifico de la conexión en vez de al listen
         else:
             print("Error establishing connection")
         logging.info("Connected to: {}:{}".format(destAddr[0], destAddr[1])) 
@@ -81,14 +93,19 @@ class RDTSocket:
         # si está llena acceptedConnections deberíamos quedarnos en un while esperando que se vacíe, no hacer otra cosa
         while(self.listening):
             data, address = self.socket.recvfrom(MSS)
-            if(self.twhIsSYN(data) and address not in self.unconfirmedConnections):
+            packet = RDTPacket.fromSerializedPacket(data)
+
+            if(packet.isSYN() and address not in self.unconfirmedConnections):
                 if(self.getAmountOfPendingConnections() >= maxQueuedConnections):  
                     continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
-                newConnection = self.createConnection(address)
+                newConnection = self.createConnection(address, packet.seqNum)
                 self.unconfirmedConnections[newConnection.getDestinationAddress()] = newConnection
-                self.socket.sendto(("SYN ACK" + str(newConnection.srcPort)).encode(), address)
+                synAckPacket = RDTPacket.makeSYNACKPacket(newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
+                #self.socket.sendto(("SYN ACK" + str(newConnection.srcPort)).encode(), address)
+                self.socket.sendto(synAckPacket.serialize(), address)
+                print("Envío server sequence number: {} y ACK number {}".format(newConnection.seqNum, newConnection.ackNum))
                 print("Requested connection from:", address[0], ":", address[1])
-            elif(self.twhIsACK(data) and address in self.unconfirmedConnections):
+            elif(packet.isACK() and address in self.unconfirmedConnections):
                 clientSocket = self.unconfirmedConnections[address]
                 self.unacceptedConnections[address] = clientSocket
                 del self.unconfirmedConnections[address]
@@ -98,17 +115,12 @@ class RDTSocket:
     """
         Lo ejecuta el servidor para crear un socket nuevo para la comunicación con el cliente
     """
-    def createConnection(self, address):
+    def createConnection(self, address, ackNum):
         newConnection = RDTSocket()
         newConnection.bind(('', 0))
         newConnection.setDestinationAddress(address)
+        newConnection.ackNum = ackNum + 1
         return newConnection
-
-    def twhIsSYN(self, data):
-        return data.decode() == "SYN"
-
-    def twhIsACK(self, data):
-        return data.decode() == "ACK"
 
     def getDestinationAddress(self):
         return (self.destIP, self.destPort)
@@ -132,7 +144,8 @@ class RDTSocket:
     def recv(self, bufsize):
         logging.info("Receiving...")
         print("Receiving...")
-        return self.socket.recvfrom(bufsize)
+        serializedPacket, addr = self.socket.recvfrom(bufsize)
+        return (RDTPacket.fromSerializedPacket(serializedPacket), addr)
 
     def send(self, bytes):
         logging.info("Sending...")
