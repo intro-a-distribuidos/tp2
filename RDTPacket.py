@@ -1,11 +1,5 @@
 import struct
 
-"""
-    TODO: variable length, primero se necesita unpackear el length 
-    y dsp el dato (todo con la función unpack_into())
-"""
-SERIALIZATION_FORMAT = "i i ? ? 1400s"
-
 
 class RDTPacket:
     seqNum = 0
@@ -26,9 +20,11 @@ class RDTPacket:
         self.ack = ack
         self.data = data
 
+    # https://stackoverflow.com/questions/3753589/packing-and-unpacking-variable-length-array-string-using-the-struct-module-in-py
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack(SERIALIZATION_FORMAT, serializedPacket)
+        packet = struct.unpack("i i ? ?", serializedPacket[:10])
+        packet = (*packet, serializedPacket[10:])
         return cls(*packet)
 
     @classmethod
@@ -44,7 +40,7 @@ class RDTPacket:
         return cls(seqNum, ackNum, True, True, str(newServerPort).encode())
 
     def serialize(self):
-        return struct.pack(SERIALIZATION_FORMAT, self.seqNum, self.ackNum, self.syn, self.ack, self.data)
+        return struct.pack("i i ? ? {}s".format(len(self.data)), self.seqNum, self.ackNum, self.syn, self.ack, self.data)
 
     def isSYN(self):
         return self.syn

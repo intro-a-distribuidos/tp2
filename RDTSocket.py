@@ -2,7 +2,7 @@ import time
 import logging
 import random
 from threading import Thread
-from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR
+from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
 from RDTPacket import RDTPacket
 from sys import getsizeof
 
@@ -53,7 +53,7 @@ class RDTSocket:
             print("Envío client_ack num: {}".format(self.ackNum))
             ackPacket = RDTPacket.makeACKPacket(self.ackNum)
             self.send(ackPacket.serialize())
-            self.destPort = int(synAckPacket.data.decode().rstrip('\x00'))  # El cliente ahora apunta al socket especifico de la conexión en vez de al listen
+            self.destPort = int(synAckPacket.data.decode())  # El cliente ahora apunta al socket especifico de la conexión en vez de al listen
         else:
             print("Error establishing connection")
         logging.info("Connected to: {}:{}".format(destAddr[0], destAddr[1])) 
@@ -118,6 +118,7 @@ class RDTSocket:
     def createConnection(self, address, ackNum):
         newConnection = RDTSocket()
         newConnection.bind(('', 0))
+        newConnection.socket.settimeout(2)  # 2 second timeout
         newConnection.setDestinationAddress(address)
         newConnection.ackNum = ackNum + 1
         return newConnection
@@ -143,13 +144,38 @@ class RDTSocket:
 
     def recv(self, bufsize):
         logging.info("Receiving...")
-        print("Receiving...")
         serializedPacket, addr = self.socket.recvfrom(bufsize)
         return (RDTPacket.fromSerializedPacket(serializedPacket), addr)
 
     def send(self, bytes):
         logging.info("Sending...")
         return self.socket.sendto(bytes, (self.destIP, self.destPort))
+
+    def sendStopAndWait(self, bytes):   
+        logging.info("Sending...")
+        receivedAck = False
+        bytesSent = None
+        destAddr = None
+        tries = 0
+
+        print("{}:{}".format(self.destIP, self.destPort))
+        while(not receivedAck and tries < 10):
+            try:
+                print("Sending...")
+                packetSent = RDTPacket(self.seqNum, self.ackNum, 0, 0, bytes)
+                self.socket.sendto(packetSent.serialize(), (self.destIP, self.destPort))
+                recvPacket, addr = self.recv(MSS)
+                if(recvPacket.isACK() and ((self.seqNum + len(bytes) + 1) == recvPacket.ackNum)):
+                    print("Sent successfully")
+                    receivedAck = True
+                else:
+                    print("Invalid ack num")
+                    print("Retrying...")
+            except timeout:
+                print("Timeout")
+                print("Retrying...")
+                tries += 1
+        return (bytesSent, destAddr)
 
     def close(self):
         self.listening = False
