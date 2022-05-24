@@ -151,6 +151,9 @@ class RDTSocket:
         logging.info("Sending...")
         return self.socket.sendto(bytes, (self.destIP, self.destPort))
 
+    """
+        WORK IN PROGRESS
+    """
     def sendStopAndWait(self, bytes):   
         logging.info("Sending...")
         receivedAck = False

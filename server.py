@@ -16,7 +16,7 @@ logging.debug("Server listening on port {0}".format(SERVER_PORT))
 while True:
     connectionSocket, addr = serverSocket.accept()
     print("socket accepted with addr:", addr)
-    packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())
+    packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())  #TEST Stop and wait
     connectionSocket.close()
 
 serverSocket.close()

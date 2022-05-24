@@ -11,7 +11,7 @@ clientSocket = RDTSocket()
 clientSocket.connect(('127.0.0.1', 12000))
 print("Conectado al servidor en la dirección: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
 
-packet, addr = clientSocket.recv(2000)
+packet, addr = clientSocket.recv(2000) #TODO: RECV STOP AND WAIT (TENGO QUE SUMAR EL ACK POR LA CANT DE BYTES RECIBIDOS)
 print("packet data length: {}".format(len(packet.data)))
 time.sleep(5)
 clientSocket.send(RDTPacket.makeACKPacket(clientSocket.ackNum + len(packet.data)).serialize())
