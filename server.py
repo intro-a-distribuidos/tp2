@@ -1,7 +1,9 @@
 from RDTSocket import RDTSocket
+from exceptions import TimeOutException
 import logging
 import time
 import sys
+
 logging.basicConfig(level=logging.DEBUG, #filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
@@ -15,15 +17,16 @@ serverSocket.listen(1)
 logging.debug("Server listening on port {0}".format(SERVER_PORT))
 
 connectionSocket, addr = serverSocket.accept()
-logging.info("socket accepted with addr:", addr)
+logging.info("socket accepted with addr:{}".format(addr))
 packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())  #TEST Stop and wait
 connectionSocket.close()
 
-"""while True:
+while True:
+    logging.debug(str(serverSocket.acceptedConnections))
     connectionSocket, addr = serverSocket.accept()
-    logging.info("socket accepted with addr:", addr)
+    logging.info("socket accepted with addr: {}:{}".format(*addr))
     packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())  #TEST Stop and wait
-    connectionSocket.close()"""
+    connectionSocket.close()
 
 time.sleep(200)
-#serverSocket.close()
+serverSocket.close()

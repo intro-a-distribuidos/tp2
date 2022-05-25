@@ -2,6 +2,7 @@ from multiprocessing.connection import wait
 from timeit import repeat
 from RDTSocket import RDTSocket
 from RDTPacket import RDTPacket
+from exceptions import TimeOutException
 import logging
 import time
 import sys
@@ -18,15 +19,26 @@ logging.basicConfig(level=logging.DEBUG, #filename="client.log",
 """
 
 clientSocket = RDTSocket()
-clientSocket.connect(('127.0.0.1', 12000))
-logging.info("Conectado al servidor en la dirección: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
+
+try:
+    clientSocket.connect(('127.0.0.1', 12000))
+except TimeOutException:
+    logging.info("Cannot connect with Server: TIMEOUT")
+    exit()
+
+logging.debug("Client opened in {}:{}".format(*clientSocket.getsockname()))
+
+logging.info("Connecting with Server: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
+
 
 packet, addr = clientSocket.recv(2000) #TODO: RECV STOP AND WAIT (TENGO QUE SUMAR EL ACK POR LA CANT DE BYTES RECIBIDOS)
-logging.info("packet data length: {}".format(len(packet.data)))
 
-#time.sleep(5)
+time.sleep(5)
+
+logging.info("Packet data length: {}".format(len(packet.data)))
 
 clientSocket.send(RDTPacket.makeACKPacket(clientSocket.ackNum + len(packet.data)).serialize())
 
-logging.info(packet.data.decode().rstrip('\x00'))
+logging.info(packet.data.decode())
+
 clientSocket.close()
