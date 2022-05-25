@@ -159,7 +159,7 @@ class RDTSocket:
         receivedAck = False
         bytesSent = None
         destAddr = None
-        tries = 0
+        tries = 0  # Es temporal, la usamos para evitar ciclos infinitos
 
         print("{}:{}".format(self.destIP, self.destPort))
         while(not receivedAck and tries < 10):
@@ -170,6 +170,7 @@ class RDTSocket:
                 recvPacket, addr = self.recv(MSS)
                 if(recvPacket.isACK() and ((self.seqNum + len(bytes) + 1) == recvPacket.ackNum)):
                     print("Sent successfully")
+                    self.seqNum += len(bytes)
                     receivedAck = True
                 else:
                     print("Invalid ack num")
