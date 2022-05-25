@@ -1,4 +1,3 @@
-from fileinput import filename
 from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM 
 from threading import Thread
 import logging
@@ -76,32 +75,63 @@ class file_transfer:
             if bytes_recibidos == b'':
                 logging.debug("Se cerró el socket antes de terminar el upload, Socket ID:{}".format(connSocket))
                 connSocket.close()
+                f.close()
                 os.remove(file_path)
+                return
             
             f.write(bytes_recibidos)
             bytes_totales_recibidos += len(bytes_recibidos)
 
         logging.debug("Terminado el upload de: {}".format(file_name))
+        f.close()
         connSocket.close()
         return
 
-    def download_file(self,connSocket,file_name,file_size):
+    def download_file(self,connSocket,file_name):
 
+        bytes_totales_enviados = 0
+        file_path = self.dir_path + "/" + file_name
         
-        file = []
-        bytes_totales_recibidos = 0
+        #Intentamos abrir el archivo para descargar
+        try:
+            f = open(file_path,"rb")
+        except:
+            logging.debug("No existe el file {} para descargar".format(file_name))
+            print("No existe el file:" + file_name)
+            return
+
+        SIZE = os.path.getsize(file_path)
      
         logging.debug("Iniciando download")
-        while bytes_totales_recibidos < SIZE: 
-            bytes_recibidos = connSocket.recv(self.MSS)
+        while bytes_totales_enviados < SIZE: 
+
+            bytes_leidos = f.read(self.MSS)
+            bytes_enviados = self.send_MSS(bytes_leidos,connSocket)
             
             #Se cerró el socket antes de terminar el upload
-            if bytes_recibidos == b'':
-                logging.debug("Se cerró el socket antes de terminar el upload, Socket ID:{}".format(connSocket))
+            if bytes_enviados == b'':
+                logging.debug("Se cerró el socket antes de terminar el download, Socket ID:{}".format(connSocket))
                 connSocket.close()
+                f.close()
+                return
 
-            file.append(bytes_recibidos)
-            bytes_totales_recibidos += len(bytes_recibidos)
+            
+            bytes_totales_enviados += len(bytes_enviados)
 
+        f.close()
+        connSocket.close()
         return
+
+
+    # Funcion auxiliar para download file
+    # Manda un MSS al cliente
+    def send_MSS(self,msg,connSocket):
+        bytes_enviados_totales = 0
+        while bytes_enviados_totales < self.MSS:
+            bytes_enviados = connSocket.send(msg)
+            if bytes_enviados == b'':
+                return bytes_enviados
+            bytes_enviados_totales += bytes_enviados
+
+        return bytes_enviados
     
