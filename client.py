@@ -1,11 +1,15 @@
+from multiprocessing.connection import wait
+from timeit import repeat
 from RDTSocket import RDTSocket
 from RDTPacket import RDTPacket
 import logging
 import time
+import sys
 
-logging.basicConfig(level=logging.DEBUG, filename="client.log",
+logging.basicConfig(level=logging.DEBUG, #filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p')
+                    datefmt='%Y/%m/%d %I:%M:%S %p',
+                    stream=sys.stdout)
 
 """
     El servidor manda un paquete con stop and wait, con un timeout de 2 segundos.
@@ -15,13 +19,14 @@ logging.basicConfig(level=logging.DEBUG, filename="client.log",
 
 clientSocket = RDTSocket()
 clientSocket.connect(('127.0.0.1', 12000))
-print("Conectado al servidor en la dirección: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
+logging.info("Conectado al servidor en la dirección: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
 
 packet, addr = clientSocket.recv(2000) #TODO: RECV STOP AND WAIT (TENGO QUE SUMAR EL ACK POR LA CANT DE BYTES RECIBIDOS)
-print("packet data length: {}".format(len(packet.data)))
+logging.info("packet data length: {}".format(len(packet.data)))
 
-time.sleep(5)
+#time.sleep(5)
 
 clientSocket.send(RDTPacket.makeACKPacket(clientSocket.ackNum + len(packet.data)).serialize())
-print(packet.data.decode().rstrip('\x00'))
+
+logging.info(packet.data.decode().rstrip('\x00'))
 clientSocket.close()
