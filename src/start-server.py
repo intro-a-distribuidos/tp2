@@ -1,7 +1,8 @@
 import argparse
 import pathlib
-from lib.rdtsocket import RDTsocket
 import logging
+
+from FileTransfer import FileTransfer
 
 def getArgs():
     parser = argparse.ArgumentParser()
@@ -58,15 +59,9 @@ logging.basicConfig(level=logging.DEBUG, filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p')
 
-serverSocket = RDTsocket()
-serverSocket.bind((args.host, args.port))
-serverSocket.listen(1)
-logging.debug("Server listening on port {0}".format(args.port))
-connectionSocket, addr = serverSocket.accept()
-print("socket accepted with addr:", addr)
 
-connectionSocket.close()
-serverSocket.close()
+fileTransfer = FileTransfer()
+fileTransfer.start_server()
 
 
 

@@ -1,6 +1,6 @@
 import argparse
-from socket import socket, AF_INET, SOCK_DGRAM
-from lib.rdtsocket import RDTsocket
+from socket import socket, AF_INET, SOCK_STREAM
+from FileTransfer import FileTransfer, Packet
 import logging
 
 def getArgs():
@@ -65,6 +65,32 @@ logging.basicConfig(level=logging.DEBUG, filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p')
 
-clientSocket = RDTsocket()
-clientSocket.connect((args.host, args.port))
-clientSocket.close()
+###############################################################
+#   Esto es un ejemplo de como funcionaria subir un archivo   #
+#   al directorio del servidor.                               #
+###############################################################
+
+
+# Me creo que socket que me intento conectar con el servidor
+client_socket = socket(AF_INET,SOCK_STREAM)
+client_socket.connect(('',12000))
+
+
+# Envio el primer mensaje de configuracion al servidor
+# Packet( 
+#        type: 1 ---> Le estoy avisando que voy a enviarle un archivo
+#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
+#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
+#       )
+packet = Packet(1,0,'Pruebas'.encode()).serialize()
+messaje = packet + bytearray(1500 - len(packet)) #padding
+client_socket.send(messaje)
+
+# Por ultimo llamo al FileTransfer y le pide que:
+# Envie el archivo src/test por cliente_socket
+
+FileTransfer = FileTransfer()
+FileTransfer.send_file(client_socket,'1','src/test')
+client_socket.close()
+# El '1' deberia ser ser tu addr en princio
+# solo la utilizo para debugging (TODO)
