@@ -31,14 +31,22 @@ logging.debug("Client opened in {}:{}".format(*clientSocket.getsockname()))
 logging.info("Connecting with Server: {}:{}".format(clientSocket.destIP, clientSocket.destPort))
 
 
-packet, addr = clientSocket.recv(2000) #TODO: RECV STOP AND WAIT (TENGO QUE SUMAR EL ACK POR LA CANT DE BYTES RECIBIDOS)
+"""packet, addr = clientSocket.recv(2000) #TODO: RECV STOP AND WAIT (TENGO QUE SUMAR EL ACK POR LA CANT DE BYTES RECIBIDOS)
 
 time.sleep(5)
 
 logging.info("Packet data length: {}".format(len(packet.data)))
 
 clientSocket.send(RDTPacket.makeACKPacket(clientSocket.ackNum + len(packet.data)).serialize())
+"""
 
-logging.info(packet.data.decode())
+data = clientSocket.recvStopAndWait(2000)
+logging.info(data.decode())
+logging.debug("Recibo 1")
+
+data = clientSocket.recvStopAndWait(2000)
+logging.info(data.decode())
+logging.debug("Recibo 2")
+
 
 clientSocket.close()
