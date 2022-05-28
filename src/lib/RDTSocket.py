@@ -1,11 +1,17 @@
 import time
 import logging
 import random
-from exceptions import TimeOutException
+
+from sqlalchemy import null
+from .exceptions import TimeOutException
 from threading import Lock, Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
-from RDTPacket import RDTPacket
+from .RDTPacket import RDTPacket
 from sys import getsizeof
+
+class TimeOutException(Exception):
+    pass
+
 
 MSS = 1500
 
@@ -235,7 +241,7 @@ class RDTSocket:
     """
     def sendStopAndWait(self, bytes):
         receivedAck = False
-        bytesSent = None
+        bytesSent = 0
         destAddr = None
         tries = 10  # Es temporal, la usamos para evitar ciclos infinitos
 
@@ -244,6 +250,7 @@ class RDTSocket:
             try:
                 logging.debug("Sending SEQNO [{}], ACKNO [{}]".format(self.seqNum, self.ackNum))
                 packetSent = RDTPacket(self.seqNum, self.ackNum, 0, 0, bytes)
+                logging.debug(bytes)
                 self.socket.sendto(packetSent.serialize(), (self.destIP, self.destPort))
 
                 recvPacket = self._recv(MSS)
@@ -268,10 +275,12 @@ class RDTSocket:
         receivedPacket = None
         while(not receivedSuccessfully):
             logging.debug("Waiting for packet [{}]".format(self.ackNum))
+            
             try:
                 receivedPacket = self._recv(bufsize)
             except:
-                continue
+                return b''
+           
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
             # TODO: verificar checksum
             if(receivedSuccessfully):
@@ -282,6 +291,7 @@ class RDTSocket:
         return receivedPacket.data
 
     def closeConnectionSocket(self, destinationAddress):
+
         self.lockUnacceptedConnections.acquire()
         if(self.unacceptedConnections.get(destinationAddress) is not None):
             del self.unacceptedConnections[destinationAddress]

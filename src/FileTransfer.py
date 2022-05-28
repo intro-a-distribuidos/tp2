@@ -4,6 +4,8 @@ import logging
 import struct
 import os
 
+from lib.RDTSocket import RDTSocket
+
 class Packet:
     type = 0
     size = 0
@@ -24,7 +26,7 @@ class Packet:
         packet = (*packet, serializedPacket[8:])
         return cls(*packet)
 
-
+SERVER_PORT = 12000
 class FileTransfer:
     DIR_PATH = "server_files"
     RECEIVE = 0
@@ -35,17 +37,21 @@ class FileTransfer:
    
     def start_server(self):
         #Creamos server y lo ponemos a escuchar
+        """
         server_socket = socket(AF_INET,SOCK_STREAM)
         server_socket.bind(('',12000))
         server_socket.listen()
-
+        """
+        serverSocket = RDTSocket()
+        serverSocket.bind(('', SERVER_PORT))
+        serverSocket.listen(1)
         try:
             os.mkdir(self.dir_path)
         except:
             pass
 
         while True:
-            connSocket , addr = server_socket.accept()
+            connSocket , addr = serverSocket.accept()
             connThread = Thread(target=self.client_handle,args=(connSocket,addr))
             connThread.daemon = True 
             logging.debug("Iniciando conexion... addr:{}".format(addr))
@@ -57,19 +63,14 @@ class FileTransfer:
 
     def client_handle(self,connSocket, addr):
 
-        config_msg = bytearray()
-        bytesReceived = 0
-        
-        while bytesReceived < self.MSS: 
-            bytes = connSocket.recv(self.MSS)
-            bytesReceived += len(bytes)
-            config_msg += bytes
-            if (bytes == b''):
-                logging.debug("El Cliente corto la conexion")
-                connSocket.close()
-                return 
+        bytes = connSocket.recvStopAndWait(self.MSS)
 
-        packet = Packet.fromSerializedPacket(config_msg)
+        if (bytes == b''):
+            logging.debug("El Cliente corto la conexion")
+            connSocket.close()
+            return 
+
+        packet = Packet.fromSerializedPacket(bytes)
         file_size = packet.size
         file_name = packet.name.decode().rstrip("\x00")
          
@@ -103,7 +104,7 @@ class FileTransfer:
         bytes = b'a'
 
         while bytes != b'': 
-            bytes = connSocket.recv(self.MSS)
+            bytes = connSocket.recvStopAndWait(self.MSS)
             f.write(bytes.decode()) #TODO: Chequear si es escribe bien.
         
         f.close()
@@ -120,35 +121,17 @@ class FileTransfer:
             #TODO: Enviar un paquete con el typo 2(error)
             return
 
-        bytes = 0
-        SIZE = os.path.getsize(file_name)
      
+        file_bytes = f.read(self.MSS)
+        while file_bytes != '': 
 
-        while bytes < SIZE: 
-            file_bytes = f.read(self.MSS)
-            bytes_sent = self.send_MSS(file_bytes,connSocket)
-            bytes += bytes_sent
+            bytes_sent = connSocket.sendStopAndWait(file_bytes.encode())
 
             if bytes_sent == b'':
                 f.close()
                 logging.debug("Se cerró el socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
                 return            
-            
+            file_bytes = f.read(self.MSS)
         f.close()
         logging.debug("{} termino de enviar los archivos".format(addr))
         return
-
-
-    # Nose si esta funcion es necesaria
-    def send_MSS(self,msg,connSocket):
-        messaje = msg.encode() + bytearray(self.MSS - len(msg)) #padding
-
-        bytes_count = 0
-        while bytes_count < self.MSS:
-            bytes_sent = connSocket.send(messaje)
-            if bytes_sent == b'':
-                return bytes_sent
-            bytes_count += bytes_sent
-
-        return bytes_sent
-    
