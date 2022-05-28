@@ -43,16 +43,6 @@ class FileTransfer:
     CONFIG_LEN = 209
 
     def start_server(self):
-<<<<<<< HEAD
-        #Creamos server y lo ponemos a escuchar
-=======
-        # Creamos server y lo ponemos a escuchar
-        """
-        server_socket = socket(AF_INET,SOCK_STREAM)
-        server_socket.bind(('',12000))
-        server_socket.listen()
-        """
->>>>>>> e9d029623f017254358a0700885a2860d562f409
         serverSocket = RDTSocket()
         serverSocket.bind(('', SERVER_PORT))
         serverSocket.listen(1)
@@ -115,26 +105,15 @@ class FileTransfer:
     #   Esta funcion lee los paquetes que llegan por el socket y
     #   los escriben en el file enviado por parametro. Si el file
     #   existe lo sobreescribe.
-<<<<<<< HEAD
     def recv_file(self,connSocket,addr,file_name):
        
         f = open(file_name,"wb")
-=======
-    def recv_file(self, connSocket, addr, file_name):
-
-        f = open(file_name, "w")
->>>>>>> e9d029623f017254358a0700885a2860d562f409
         bytes = b'a'
 
         while bytes != b'':
             bytes = connSocket.recvStopAndWait(self.MSS)
-<<<<<<< HEAD
             f.write(bytes) #TODO: Chequear si es escribe bien.
         
-=======
-            f.write(bytes.decode())  # TODO: Chequear si es escribe bien.
-
->>>>>>> e9d029623f017254358a0700885a2860d562f409
         f.close()
         logging.debug("{} termino de recibir los archivos".format(addr))
         return
@@ -143,43 +122,25 @@ class FileTransfer:
     def send_file(self, connSocket, addr, file_name):
 
         try:
-<<<<<<< HEAD
             f = open(file_name,'rb')
         except:
-=======
-            f = open(file_name, 'r')
-        except BaseException:
->>>>>>> e9d029623f017254358a0700885a2860d562f409
             logging.debug("No existe el file {}".format(file_name))
             # TODO: Enviar un paquete con el typo 2(error)
             return
 
         file_bytes = f.read(self.MSS)
-<<<<<<< HEAD
         while file_bytes != b'': 
-=======
-        while file_bytes != '':
->>>>>>> e9d029623f017254358a0700885a2860d562f409
 
             bytes_sent = connSocket.sendStopAndWait(file_bytes)
 
             if bytes_sent == b'':
                 f.close()
-<<<<<<< HEAD
                 logging.debug("Se cerró elb socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
                 return            
-=======
-                logging.debug(
-                    "Se cerró el socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
-                return
->>>>>>> e9d029623f017254358a0700885a2860d562f409
             file_bytes = f.read(self.MSS)
         f.close()
         logging.debug("{} termino de enviar los archivos".format(addr))
         return
-<<<<<<< HEAD
- 
-=======
 
         # Función auxiliar que arma un packet (request) y se lo manda al
         # servidor
@@ -207,4 +168,3 @@ class FileTransfer:
     def request_download(self, clientSocket, file_name):
         self.request(clientSocket, self.RECEIVE, file_name)
         return
->>>>>>> e9d029623f017254358a0700885a2860d562f409
