@@ -11,3 +11,35 @@ Dada las diferentes operaciones que pueden realizarse entre el cliente y el serv
 
 * [Enunciado completo](https://campus.fi.uba.ar/pluginfile.php/311617/mod_folder/content/0/tp_file_transfer_udp_selective_repeat.pdf)
 * [Informe en Latex](https://www.overleaf.com/3316582635qsyvscytgbdb)
+
+### Instalar Comcast
+```
+# Instalar GO
+$ sudo apt install golang
+
+# Instalar comcast
+
+### Forma 1
+$ export GO111MODULE=on
+$ go get github.com/tylertreat/comcast
+$ cd $HOME/go/bin
+$ ./comcast --device=lo --packet-loss=50%
+...
+$ ./comcast --device=lo --stop
+
+
+### Forma 2
+$ cd $HOME/go/src/github.com
+$ git clone git@github.com:tylertreat/comcast.git
+$ cd tylertreat/comcast
+$ go run comcast.go --device=lo --packet-loss=50% 
+...
+$ go run comcast.go --device=lo --stop
+```
+
+### Alternativa a comcast, más divertida
+```
+sudo iptables -A INPUT -m statistic --mode random --probability 0.3 -j DROP
+sudo iptables -A OUTPUT -m statistic --mode random --probability 0.3 -j DROP
+sudo iptables --flush
+```

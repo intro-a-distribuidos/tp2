@@ -1,7 +1,7 @@
 import argparse
 import pathlib
 import logging
-
+import sys
 from FileTransfer import FileTransfer
 
 def getArgs():
@@ -55,9 +55,10 @@ def getArgs():
 
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG, filename="server.log",
+logging.basicConfig(level=logging.DEBUG, #filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p')
+                    datefmt='%Y/%m/%d %I:%M:%S %p',
+                    stream=sys.stdout)
 
 
 fileTransfer = FileTransfer()
