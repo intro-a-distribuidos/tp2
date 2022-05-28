@@ -31,17 +31,13 @@ class FileTransfer:
     DIR_PATH = "server_files"
     RECEIVE = 0
     SEND = 1
-    MSS = 1500 
+    MSS = 1500
+    PAYLOAD = MSS - RDTSocket.RDTHEADER
     CONFIG_LEN = 209
 
    
     def start_server(self):
         #Creamos server y lo ponemos a escuchar
-        """
-        server_socket = socket(AF_INET,SOCK_STREAM)
-        server_socket.bind(('',12000))
-        server_socket.listen()
-        """
         serverSocket = RDTSocket()
         serverSocket.bind(('', SERVER_PORT))
         serverSocket.listen(1)
@@ -79,7 +75,7 @@ class FileTransfer:
         if packet.type == self.RECEIVE:
             logging.debug("Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
             # Si el cliente quiere recibir un archivo -> Servidor debe enviar
-            # self.send_file(connSocket,addr,file_name)
+            self.send_file(connSocket,addr,self.DIR_PATH + '/' + file_name)
 
         elif packet.type == self.SEND:# and packet.size < 4GB
             logging.debug("Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
@@ -100,12 +96,12 @@ class FileTransfer:
     #   existe lo sobreescribe.
     def recv_file(self,connSocket,addr,file_name):
        
-        f = open(file_name,"w")
+        f = open(file_name,"wb")
         bytes = b'a'
 
         while bytes != b'': 
             bytes = connSocket.recvStopAndWait(self.MSS)
-            f.write(bytes.decode()) #TODO: Chequear si es escribe bien.
+            f.write(bytes) #TODO: Chequear si es escribe bien.
         
         f.close()
         logging.debug("{} termino de recibir los archivos".format(addr))
@@ -115,7 +111,7 @@ class FileTransfer:
     def send_file(self,connSocket,addr,file_name):
 
         try:
-            f = open(file_name,'r')
+            f = open(file_name,'rb')
         except:
             logging.debug("No existe el file {}".format(file_name))
             #TODO: Enviar un paquete con el typo 2(error)
@@ -123,15 +119,16 @@ class FileTransfer:
 
      
         file_bytes = f.read(self.MSS)
-        while file_bytes != '': 
+        while file_bytes != b'': 
 
-            bytes_sent = connSocket.sendStopAndWait(file_bytes.encode())
+            bytes_sent = connSocket.sendStopAndWait(file_bytes)
 
             if bytes_sent == b'':
                 f.close()
-                logging.debug("Se cerró el socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
+                logging.debug("Se cerró elb socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
                 return            
             file_bytes = f.read(self.MSS)
         f.close()
         logging.debug("{} termino de enviar los archivos".format(addr))
         return
+ 

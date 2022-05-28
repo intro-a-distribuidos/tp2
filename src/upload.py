@@ -86,7 +86,7 @@ client_socket.connect(('127.0.0.1',12000))
 #        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
 #        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
 #       )
-packet = Packet(1,0,'Pruebas'.encode()).serialize()
+packet = Packet(1,0,'Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg'.encode()).serialize()
 messaje = packet #+ bytearray(1500 - len(packet)) #padding
 client_socket.sendStopAndWait(messaje)
 
@@ -94,7 +94,7 @@ client_socket.sendStopAndWait(messaje)
 # Envie el archivo src/test por cliente_socket
 
 FileTransfer = FileTransfer()
-FileTransfer.send_file(client_socket,'1','client_files/test')
+FileTransfer.send_file(client_socket,'1','client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
 client_socket.close()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)

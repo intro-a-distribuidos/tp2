@@ -1,7 +1,11 @@
 import argparse
 import pathlib
 from socket import AF_INET, SOCK_STREAM
+from FileTransfer import FileTransfer, Packet
+import logging
 
+import sys
+from lib.RDTSocket import RDTSocket
 
 from pyrsistent import optional
 
@@ -65,3 +69,34 @@ args = getArgs()
 logging.basicConfig(level=logging.DEBUG, filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p')
+
+
+###############################################################
+#   Esto es un ejemplo de como funcionaria bajar un archivo   #
+#   del directorio del servidor.                              #
+###############################################################
+
+
+# Me creo que socket que me intento conectar con el servidor
+client_socket = RDTSocket()
+client_socket.connect(('127.0.0.1',12000))
+
+
+# Envio el primer mensaje de configuracion al servidor
+# Packet( 
+#        type: 0 ---> Le estoy pidiendo un archivo
+#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
+#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
+#       )
+packet = Packet(0,0,'Lorem.txt'.encode()).serialize()
+messaje = packet #+ bytearray(1500 - len(packet)) #padding
+client_socket.sendStopAndWait(messaje)
+
+# Por ultimo llamo al FileTransfer y le pide que:
+# Envie el archivo src/test por cliente_socket
+
+FileTransfer = FileTransfer()
+FileTransfer.recv_file(client_socket,'1','client_files/MyLorem.txt')
+client_socket.close()
+# El '1' deberia ser ser tu addr en princio
+# solo la utilizo para debugging (TODO)
