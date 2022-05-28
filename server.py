@@ -16,16 +16,14 @@ serverSocket.bind(('', SERVER_PORT))
 serverSocket.listen(1)
 logging.debug("Server listening on port {0}".format(SERVER_PORT))
 
-connectionSocket, addr = serverSocket.accept()
-logging.info("socket accepted with addr:{}".format(addr))
-packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())  #TEST Stop and wait
-connectionSocket.close()
-
 while True:
     logging.debug(str(serverSocket.acceptedConnections))
     connectionSocket, addr = serverSocket.accept()
     logging.info("socket accepted with addr: {}:{}".format(*addr))
-    packet, addr = connectionSocket.sendStopAndWait("Hola mundo".encode())  #TEST Stop and wait
+    logging.debug("Envío 1")
+    data = connectionSocket.sendStopAndWait("Hola mundo".encode())
+    logging.debug("Envío 2")
+    data = connectionSocket.sendStopAndWait("Hola mundo2".encode())
     connectionSocket.close()
 
 time.sleep(200)
