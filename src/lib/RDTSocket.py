@@ -267,7 +267,6 @@ class RDTSocket:
     def sendStopAndWait(self, bytes):
         receivedAck = False
         bytesSent = 0
-        destAddr = None
         tries = 10  # Es temporal, la usamos para evitar ciclos infinitos
 
         logging.debug(
@@ -278,15 +277,15 @@ class RDTSocket:
                 logging.debug(
                     "Sending SEQNO [{}], ACKNO [{}]".format(
                         self.seqNum, self.ackNum))
-                packetSent = RDTPacket(self.seqNum, self.ackNum, 0, 0, bytes)
+                packetSent = RDTPacket(self.seqNum, self.ackNum, False, False, False, bytes)
                 # logging.debug(bytes)
-                self.socket.sendto(
+                bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))
 
                 try:
                     recvPacket = self._recv(MSS)
                 except BaseException:
-                    return b''
+                    return 0
 
                 if(recvPacket.isACK() and ((self.seqNum + len(bytes)) == recvPacket.ackNum)):
                     logging.info("Sent successfully")
@@ -301,7 +300,7 @@ class RDTSocket:
                 else:
                     logging.debug(
                         "Unexpected message from {}:{}, excepted ACK".format(
-                            *addr))
+                            self.destIP, self.destPort))
             except timeout:
                 logging.info("Timeout")
                 logging.info("Retrying...")
