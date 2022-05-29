@@ -13,15 +13,18 @@ from sys import getsizeof
 
 
 MSS = 1500
-WINDOWSIZE = 4
-INPUT_BUFFER_SIZE = 8
-
+WINDOWSIZE = 2
+INPUT_BUFFER_SIZE = 4
+RESEND_TIME = 0.5
 
 class RDTSocketSR:
     RDTHEADER = 10
     mainSocket = None
     listenSocket = None
+
+    lockInputBuffer = Lock()
     inputBuffer = {}
+    lockOutPutWindow = Lock()
     outPutWindow = []
 
     # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
@@ -86,12 +89,12 @@ class RDTSocketSR:
         alreadyInBuffer = self.inputBuffer.get(packet.seqNum) is not None
         isExpectedPacket = self.ackNum == packet.seqNum
         isInputBufferFull = len(self.inputBuffer) >= INPUT_BUFFER_SIZE
-
+        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
         return isExpectedPacket or (
-            not isInputBufferFull and not alreadyInBuffer)
+            not isInputBufferFull and not alreadyInBuffer and not isOldPacket)
 
     def shouldACK(self, packet):
-        isOldPacket = self.ackNum > packet.seqNum + len(packet.data)
+        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
         isInBuffer = self.inputBuffer.get(packet.seqNum)
 
         return isOldPacket or isInBuffer
@@ -108,20 +111,24 @@ class RDTSocketSR:
         while True:
             packet = self._recv(MSS)
             if packet.isACK():
-                logging.debug("Received ACK Packet(seqno={}, ackno={}, ack?=yes)".format(packet.seqNum, packet.ackNum))
+                logging.debug("Client({}:{}), Received ACK Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
                 self.updateOutPutWindow(packet.ackNum)
             else:
                 if(self.shouldAddToInputBuffer(packet)):
-                    logging.debug("Received Packet(seqno={}, ackno={}, ack?=no)".format(packet.seqNum, packet.ackNum))
+                    logging.debug("Client({}:{}), Received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
                     self.inputBuffer[packet.seqNum] = packet
                     ackPacket = RDTPacket.makeACKPacket(
                         packet.seqNum + len(packet.data))
+                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
                     self._send(ackPacket)
                 elif(self.shouldACK(packet)):  # ACK paquetes retransmitidos
-                    logging.debug("Received retransmited Packet(seqno={}, ackno={}, ack?=no)".format(packet.seqNum, packet.ackNum))
+                    logging.debug("Client({}:{}), Received retransmited Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
                     ackPacket = RDTPacket.makeACKPacket(
                         packet.seqNum + len(packet.data))
+                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
                     self._send(ackPacket)
+                else:
+                    logging.debug("Client({}:{}), Discarding received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
         return
 
     def connect(self, destAddr):
@@ -131,7 +138,7 @@ class RDTSocketSR:
         self.socket.settimeout(2)  # 2 second timeout
         synAckPacket, addr = (None, None)
         receivedSYNACK = False
-        tries = 3
+        tries = 5
 
         while(not receivedSYNACK and tries > 0):
             try:
@@ -325,44 +332,47 @@ class RDTSocketSR:
     """
 
     def wasACKED(self, seqNum):
-        if seqNum >= self.seqNum:
-            return False
-        tuplePacketAck = self.findPacket(seqNum, self.outPutWindow)
+        tuplePacketAck = self.findPacket(seqNum)
         if tuplePacketAck is not None:
             return tuplePacketAck[1]
-
-        return seqNum < self.outPutWindow[0][0]
+        if(self.outPutWindow):
+            return seqNum < self.outPutWindow[0][0].seqNum
+        return seqNum < self.ackNum
 
     def outPutWindowIsFull(self):
         return len(self.outPutWindow) == WINDOWSIZE
 
-    def findPacket(self, seqNum, list):
-        return next(
-            filter(
-                lambda tuplePacketAck: tuplePacketAck[0].seqNum == seqNum,
-                list))
+    def findPacket(self, seqNum):
+        for tuplePacketAck in self.outPutWindow:
+            if(tuplePacketAck[0].seqNum == seqNum):
+                return tuplePacketAck
+        return None
 
     def resend(self, seqNum):
         if(not self.wasACKED(seqNum)):
-            packet, _ = self.findPacket(seqNum, self.outPutWindow)
-            if packet is not None:
-                self._send(packet)
-                timerThread = Timer(2, self.resend, (seqNum,))
+            tuplePacketAck = self.findPacket(seqNum)
+            if(tuplePacketAck is not None and tuplePacketAck[0] is not None):
+                logging.debug("Resending Packet(seqno={},ackno={}, ack?=no, l={})".format(tuplePacketAck[0].seqNum, tuplePacketAck[0].ackNum, len(tuplePacketAck[0].data)))
+                self._send(tuplePacketAck[0])
+                timerThread = Timer(RESEND_TIME, self.resend, (seqNum,))
                 timerThread.daemon = True
                 timerThread.start()
 
     def sendSelectiveRepeat(self, bytes):
+        if(self.outPutWindowIsFull()):
+            logging.debug("outPutWindow is full, waiting for ACKs")
+
         while self.outPutWindowIsFull():
             time.sleep(0.2)
 
         packetSent = RDTPacket(self.seqNum, self.ackNum, 0, 0, bytes)
+        logging.debug("Sending Packet(seqno={},ackno={}, ack?=no, l={})".format(packetSent.seqNum, packetSent.ackNum, len(packetSent.data)))
         self._send(packetSent)
         self.outPutWindow.append((packetSent, False))  # TODO: Usar lock()
-        timerThread = Timer(2, self.resend, (packetSent.seqNum,))
+        timerThread = Timer(RESEND_TIME, self.resend, (packetSent.seqNum,))
         timerThread.daemon = True
         timerThread.start()
         self.seqNum += len(bytes)
-        logging.debug("Sending Packet(seqno={},ackno={}, ack?=no)".format(packetSent.seqNum, packetSent.ackNum))
     def recvSelectiveRepeat(self, bufsize):
         logging.debug("Waiting for packet {}".format(self.ackNum))
         while(not self.inputBuffer.get(self.ackNum)):
@@ -406,6 +416,9 @@ class RDTSocketSR:
         self.lockAcceptedConnections.release()
 
     def close(self):
+        while(self.outPutWindow):
+            time.sleep(0.2)
+        
         if(self.mainSocket is not None):
             self.mainSocket.closeConnectionSocket((self.destIP, self.destPort))
 

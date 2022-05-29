@@ -1,6 +1,7 @@
 from lib.RDTSocketSR import RDTSocketSR
 import logging
 import sys
+from time import sleep
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s [%(levelname)s]: %(message)s',
