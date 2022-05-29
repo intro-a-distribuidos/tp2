@@ -52,10 +52,10 @@ def simpleTest():
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
 
-    packet1 = RDTPacket(30, 24, False, False, data="#1".encode()).serialize()
-    packet2 = RDTPacket(32, 24, False, False, data="#2".encode()).serialize()
-    packet3 = RDTPacket(36, 24, False, False, data="#4".encode()).serialize()
-    packet4 = RDTPacket(34, 24, False, False, data="#3".encode()).serialize()
+    packet1 = RDTPacket(30, 24, False, False, False, data="#1".encode()).serialize()
+    packet2 = RDTPacket(32, 24, False, False, False, data="#2".encode()).serialize()
+    packet3 = RDTPacket(36, 24, False, False, False, data="#4".encode()).serialize()
+    packet4 = RDTPacket(34, 24, False, False, False, data="#3".encode()).serialize()
 
     packets = [packet1, packet2, packet3, packet4]
     rdtsocket = RDTSocketSR()
