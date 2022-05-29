@@ -5,7 +5,7 @@ from FileTransfer import FileTransfer, Packet
 import logging
 
 import sys
-from lib.RDTSocket import RDTSocket
+from lib.RDTSocketSR import RDTSocketSR
 
 from pyrsistent import optional
 
@@ -13,8 +13,6 @@ from pyrsistent import optional
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
-
-    
 
     optionals = parser.add_argument_group('optional arguments')
     optionals.add_argument(
@@ -41,7 +39,7 @@ def getArgs():
         type=str,
         metavar='',
         help='file name')
-    
+
     optionals.add_argument(
         '-v',
         '--verbose',
@@ -78,25 +76,25 @@ logging.basicConfig(level=logging.DEBUG, filename="client.log",
 
 
 # Me creo que socket que me intento conectar con el servidor
-client_socket = RDTSocket()
-client_socket.connect(('127.0.0.1',12000))
+client_socket = RDTSocketSR()
+client_socket.connect(('127.0.0.1', 12000))
 
 
 # Envio el primer mensaje de configuracion al servidor
-# Packet( 
+# Packet(
 #        type: 0 ---> Le estoy pidiendo un archivo
 #        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
 #        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
 #       )
-packet = Packet(0,0,'Lorem.txt'.encode()).serialize()
-messaje = packet #+ bytearray(1500 - len(packet)) #padding
-client_socket.sendStopAndWait(messaje)
+packet = Packet(0, 0, 'Lorem.txt'.encode()).serialize()
+messaje = packet  # + bytearray(1500 - len(packet)) #padding
+client_socket.sendSelectiveRepeat(messaje)
 
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 
 FileTransfer = FileTransfer()
-FileTransfer.recv_file(client_socket,'1','client_files/MyLorem.txt')
+FileTransfer.recv_file(client_socket, '1', 'client_files/MyLorem.txt')
 client_socket.close()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)

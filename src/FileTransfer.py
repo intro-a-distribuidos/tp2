@@ -4,7 +4,7 @@ import logging
 import struct
 import os
 
-from lib.RDTSocket import RDTSocket
+from lib.RDTSocketSR import RDTSocketSR
 
 
 class Packet:
@@ -36,14 +36,12 @@ class FileTransfer:
     RECEIVE = 0
     SEND = 1
     MSS = 1500
-<<<<<<< HEAD
-    PAYLOAD = MSS - RDTSocket.RDTHEADER
-=======
->>>>>>> e9d029623f017254358a0700885a2860d562f409
+
+    PAYLOAD = MSS - RDTSocketSR.RDTHEADER
     CONFIG_LEN = 209
 
     def start_server(self):
-        serverSocket = RDTSocket()
+        serverSocket = RDTSocketSR()
         serverSocket.bind(('', SERVER_PORT))
         serverSocket.listen(1)
         try:
@@ -64,7 +62,7 @@ class FileTransfer:
 
     def client_handle(self, connSocket, addr):
 
-        bytes = connSocket.recvStopAndWait(self.MSS)
+        bytes = connSocket.recvSelectiveRepeat(self.MSS)
 
         if (bytes == b''):
             logging.debug("El Cliente corto la conexion")
@@ -83,7 +81,7 @@ class FileTransfer:
             logging.debug(
                 "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
             # Si el cliente quiere recibir un archivo -> Servidor debe enviar
-            self.send_file(connSocket,addr,self.DIR_PATH + '/' + file_name)
+            self.send_file(connSocket, addr, self.DIR_PATH + '/' + file_name)
 
         elif packet.type == self.SEND:  # and packet.size < 4GB
             logging.debug(
@@ -105,15 +103,15 @@ class FileTransfer:
     #   Esta funcion lee los paquetes que llegan por el socket y
     #   los escriben en el file enviado por parametro. Si el file
     #   existe lo sobreescribe.
-    def recv_file(self,connSocket,addr,file_name):
-       
-        f = open(file_name,"wb")
+    def recv_file(self, connSocket, addr,file_name):
+
+        f = open(file_name, "wb")
         bytes = b'a'
 
         while bytes != b'':
-            bytes = connSocket.recvStopAndWait(self.MSS)
-            f.write(bytes) #TODO: Chequear si es escribe bien.
-        
+            bytes = connSocket.recvSelectiveRepeat(self.MSS)
+            f.write(bytes)  # TODO: Chequear si es escribe bien.
+
         f.close()
         logging.debug("{} termino de recibir los archivos".format(addr))
         return
@@ -122,21 +120,22 @@ class FileTransfer:
     def send_file(self, connSocket, addr, file_name):
 
         try:
-            f = open(file_name,'rb')
-        except:
+            f = open(file_name, 'rb')
+        except BaseException:
             logging.debug("No existe el file {}".format(file_name))
             # TODO: Enviar un paquete con el typo 2(error)
             return
 
         file_bytes = f.read(self.MSS)
-        while file_bytes != b'': 
+        while file_bytes != b'':
 
-            bytes_sent = connSocket.sendStopAndWait(file_bytes)
+            bytes_sent = connSocket.sendSelectiveRepeat(file_bytes)
 
             if bytes_sent == b'':
                 f.close()
-                logging.debug("Se cerró elb socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
-                return            
+                logging.debug(
+                    "Se cerró elb socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
+                return
             file_bytes = f.read(self.MSS)
         f.close()
         logging.debug("{} termino de enviar los archivos".format(addr))

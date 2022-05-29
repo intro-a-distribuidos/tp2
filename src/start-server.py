@@ -4,6 +4,7 @@ import logging
 import sys
 from FileTransfer import FileTransfer
 
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -53,9 +54,10 @@ def getArgs():
 
     return parser.parse_args()
 
+
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG, #filename="server.log",
+logging.basicConfig(level=logging.DEBUG,  # filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
@@ -63,7 +65,3 @@ logging.basicConfig(level=logging.DEBUG, #filename="server.log",
 
 fileTransfer = FileTransfer()
 fileTransfer.start_server()
-
-
-
-

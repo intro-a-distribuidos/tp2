@@ -23,8 +23,8 @@ class RDTPacket:
     # https://stackoverflow.com/questions/3753589/packing-and-unpacking-variable-length-array-string-using-the-struct-module-in-py
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack("i i ? ?", serializedPacket[:10]) 
-        packet = (*packet, serializedPacket[10:]) 
+        packet = struct.unpack("i i ? ?", serializedPacket[:10])
+        packet = (*packet, serializedPacket[10:])
         return cls(*packet)
 
     @classmethod
@@ -32,7 +32,7 @@ class RDTPacket:
         return cls(seqNum, 0, True, False)
 
     @classmethod
-    def makeACKPacket(cls, ackNum): 
+    def makeACKPacket(cls, ackNum):
         return cls(0, ackNum, False, True)
 
     @classmethod
@@ -40,7 +40,8 @@ class RDTPacket:
         return cls(seqNum, ackNum, True, True, str(newServerPort).encode())
 
     def serialize(self):
-        return struct.pack("i i ? ? {}s".format(len(self.data)), self.seqNum, self.ackNum, self.syn, self.ack, self.data)
+        return struct.pack("i i ? ? {}s".format(len(self.data)),
+                           self.seqNum, self.ackNum, self.syn, self.ack, self.data)
 
     def isSYN(self):
         return self.syn
