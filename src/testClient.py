@@ -33,6 +33,8 @@ client_socket.sendSelectiveRepeat('#10. Francisco: Ni un ratón se ha movido.'.e
 
 client_socket.sendSelectiveRepeat('#11. Bernardo: Muy bien. Buenas noches. Si encuentras a Horacio y Marcelo, mis compañeros de guardia, diles que vengan presto.'.encode())
 
+sleep(2)
+
 client_socket.sendSelectiveRepeat('#12. Francisco: Me parece que los oigo. Alto ahi. ¡Eh! ¿Quien va?'.encode())
 
 client_socket.close()

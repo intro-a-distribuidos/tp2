@@ -14,8 +14,8 @@ serverSocket.listen(1)
 
 connSocket, addr = serverSocket.accept()
 
-for i in range(1, 13): # de 1 a 12
-    bytes = connSocket.recvSelectiveRepeat(1500) #1
+for i in range(1, 12):  # de 1 a 12
+    bytes = connSocket.recvSelectiveRepeat(1500)  # 1
     print(bytes.decode())
 
 serverSocket.close()
