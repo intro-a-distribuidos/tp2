@@ -42,8 +42,8 @@ class RDTPacket:
         return cls(seqNum, ackNum, True, True, False, str(newServerPort).encode())
 
     @classmethod
-    def makeFINPacket(cls):
-        return cls(0, 0, False, False, True)
+    def makeFINPacket(cls, seqNum=0, ackNum=0):
+        return cls(seqNum, ackNum, False, False, True)
 
     @classmethod
     def makeFINACKPacket(cls):
