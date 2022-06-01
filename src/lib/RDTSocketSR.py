@@ -2,10 +2,10 @@ import time
 import logging
 import random
 
-from lib.exceptions import TimeOutException
+from src.lib.exceptions import TimeOutException
 from threading import Lock, Thread, Timer
 from socket import socket, AF_INET, SOCK_DGRAM, SHUT_RD, timeout
-from lib.RDTPacket import RDTPacket
+from src.lib.RDTPacket import RDTPacket
 from sys import getsizeof
 
 
