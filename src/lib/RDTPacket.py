@@ -46,8 +46,8 @@ class RDTPacket:
         return cls(seqNum, ackNum, False, False, True)
 
     @classmethod
-    def makeFINACKPacket(cls):
-        return cls(0, 0, False, True, True)
+    def makeFINACKPacket(cls, seqNum=0, ackNum=0):
+        return cls(seqNum, ackNum, False, True, True)
 
     def serialize(self):
         return struct.pack("i i ? ? ? {}s".format(len(self.data)),
@@ -57,13 +57,13 @@ class RDTPacket:
         return self.syn
 
     def isACK(self):
-        return self.ack
+        return self.ack and not self.fin
 
     def isSYNACK(self):
-        return self.isSYN() and self.isACK()
+        return self.syn and self.ack
 
     def isFIN(self):
-        return self.fin
+        return self.fin and not self.ack
     
     def isFINACK(self):
-        return self.isFIN() and self.isACK()
+        return self.fin and self.ack
