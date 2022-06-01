@@ -4,7 +4,7 @@ import logging
 import struct
 import os
 
-from lib.RDTSocketSR import RDTSocketSR
+from lib.RDTSocketSR import RDTSocketSR, RDTHEADER
 
 
 class Packet:
@@ -37,7 +37,7 @@ class FileTransfer:
     SEND = 1
     MSS = 1500
 
-    PAYLOAD = MSS - RDTSocketSR.RDTHEADER
+    PAYLOAD = MSS - RDTHEADER
     CONFIG_LEN = 209
 
     def start_server(self):
@@ -66,7 +66,7 @@ class FileTransfer:
 
         if (bytes == b''):
             logging.debug("El Cliente corto la conexion")
-            connSocket.close()
+            connSocket.closeReceiver()
             return
 
         packet = Packet.fromSerializedPacket(bytes)
@@ -82,22 +82,24 @@ class FileTransfer:
                 "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
             # Si el cliente quiere recibir un archivo -> Servidor debe enviar
             self.send_file(connSocket, addr, self.DIR_PATH + '/' + file_name)
+            connSocket.closeSender()
+
 
         elif packet.type == self.SEND:  # and packet.size < 4GB
             logging.debug(
                 "Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
             # Si el cliente quiere enviar un archivo -> Servidor debe recibir
             self.recv_file(connSocket, addr, self.DIR_PATH + '/' + file_name)
+            connSocket.closeReceiver()
 
         else:
             logging.debug(
                 "Cliente:{} solicito una operacion INVALIDA".format(addr))
-            connSocket.close()
+            connSocket.closeReceiver()
             return
 
         logging.debug(
             "La trasferencia para el cliente {}, realizo con exito".format(addr))
-        connSocket.close()
         return
 
     #   Esta funcion lee los paquetes que llegan por el socket y

@@ -102,7 +102,7 @@ FileTransfer = FileTransfer()
 FileTransfer.send_file(
     client_socket,
     '1',
-    'client_files/test')
-client_socket.close()
+    'client_files/MyLorem.txt')
+client_socket.closeSender()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)
