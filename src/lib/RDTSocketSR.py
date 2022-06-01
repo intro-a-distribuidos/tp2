@@ -564,7 +564,7 @@ class RDTSocketSR:
         self.lockAcceptedConnections.release()
 
     def close(self):
-
+        logging.debug("Try to close, sending FIN")
         if(self.listening):  # Es main server socket
             #TODO: listen close
             self.listening = False

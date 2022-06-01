@@ -18,4 +18,5 @@ for i in range(1, 13):  # de 1 a 12
     bytes = connSocket.recvSelectiveRepeat(1500)  # 1
     print(bytes.decode())
 
+connSocket.close()
 serverSocket.close()
