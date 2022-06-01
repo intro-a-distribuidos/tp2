@@ -13,18 +13,16 @@ MSS = 1500
 WINDOWSIZE = 2
 INPUT_BUFFER_SIZE = 4
 RESEND_TIME = 0.5
+RDTHEADER = 11
 
 class RDTSocketSR:
-    RDTHEADER = 11
-    mainSocket = None
-    listenSocket = None
-
-    receivingThread = None
-
-    lockInputBuffer = Lock()
-    inputBuffer = {}
-    lockOutPutWindow = Lock()
-    outPutWindow = []
+    ##############################
+    #         COMMON API         #
+    ##############################
+    def __init__(self):
+        self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.seqNum = random.randint(0, 1000)
+        logging.info("Initial sequence number: {}".format(self.seqNum))
 
     # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
     srcIP = ''  # Default source addr
@@ -35,115 +33,203 @@ class RDTSocketSR:
     seqNum = 0
     ackNum = 0
     socket = None  # Underlying UDP socket
-    listening = False
 
+    def getDestinationAddress(self):
+        return (self.destIP, self.destPort)
+
+    def matchDestAddr(self, addr):
+        return addr == (self.destIP, self.destPort)
+
+    def matchesACK(self, packet, ackNum):
+        return packet.seqNum + len(packet.data) == ackNum
+
+
+    #####################################
+    #         LISTEN/ACCEPT API         #
+    #####################################
+    mainSocket = None
+    listening = False
     lockUnacceptedConnections = Lock()
-    unacceptedConnections = {}          # Mapa de sockets en espera
+    unacceptedConnections = {}          # Waiting for accept socket map
 
     lockAcceptedConnections = Lock()
-    acceptedConnections = {}            # Mapa de sockets aceptados
-
-    requestedClose = False
-    isClosed = False
-
-    def __init__(self):
-        self.socket = socket(AF_INET, SOCK_DGRAM)
-        self.seqNum = random.randint(0, 1000)
-        logging.info("Initial sequence number: {}".format(self.seqNum))
-
-    def getsockname(self):
-        self.srcIP, self.srcPort = self.socket.getsockname()
-        return(self.srcIP, self.srcPort)
+    acceptedConnections = {}            # Accepted socket map
 
     """
-        Se usa cuando se crea un socket en el servidor,
-        se asigna la dirección del cliente al socket (obtiene la direccion del cliente durante el saludo)
+        It's used by the server during creation of new socket for a client,
+        Assigns the client address (obtained during handshake) on (destIP, destPort)
     """
-
     def setDestinationAddress(self, address):
         self.destIP = address[0]
         self.destPort = address[1]
 
     """
-        Matchea la address de destino con el address recibido
+        It's used by the server in order to assign an specific address to the socket
     """
-
-    def matchDestAddr(self, addr):
-        return addr == (self.destIP, self.destPort)
+    def bind(self, address):
+        ip, port = address
+        self.srcIP = ip
+        self.srcPort = port
+        self.socket.bind(address)
+        self.srcPort = self.socket.getsockname()[1]
 
     """
-        Se ejecuta del lado del cliente,
-        realiza el three way handshake con el servidor
+        It's used by the server.
+        Create a thread where it will listen for new connections
     """
+    def listen(self, maxQueuedConnections):
+        listeningThread = Thread(target=self.listenThread,
+                                 args=(maxQueuedConnections,))
+        listeningThread.daemon = True  # Closes with the main thread
+        self.listening = True
+        listeningThread.start()
+        logging.debug("Now server is listening...")
 
-    def matchesACK(self, packet, ackNum):
-        return packet.seqNum + len(packet.data) == ackNum
+    """
+        It's used by the server. 
+        If receive a SYN message, performs the 2whs with the client,
+            creates a new socket and appends it to unacceptedConnections...
+    """
+    def listenThread(self, maxQueuedConnections):
+        # TODO?: si está llena acceptedConnections deberíamos quedarnos en un while
+        # esperando que se vacíe, no hacer otra cosa
+        while(self.listening):
+            data, address = self.socket.recvfrom(MSS)
+            packet = RDTPacket.fromSerializedPacket(data)
 
-    def updateOutPutWindow(self, ackNum):
-        self.outPutWindow = [
-            (x[0], x[1] or self.matchesACK(
-                x[0], ackNum)) for x in self.outPutWindow]
+            if(packet.isSYN() and self.isNewClient(address)):
+                logging.info(
+                    "Requested connection from [{}:{}]".format(
+                        *address))
+                if(self.getAmountOfPendingConnections() >= maxQueuedConnections):
+                    logging.info(
+                        "Requested connection [{}:{}] refused".format(
+                            *address))
+                    continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
 
-        while(self.outPutWindow and self.outPutWindow[0][1]):
-            self.outPutWindow.pop(0)
+                newConnection = self.createConnection(address, packet.seqNum)
 
-    def shouldAddToInputBuffer(self, packet):
-        alreadyInBuffer = self.inputBuffer.get(packet.seqNum) is not None
-        isExpectedPacket = self.ackNum == packet.seqNum
-        isInputBufferFull = len(self.inputBuffer) >= INPUT_BUFFER_SIZE
-        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
-        return isExpectedPacket or (
-            not isInputBufferFull and not alreadyInBuffer and not isOldPacket)
+                self.lockUnacceptedConnections.acquire()
+                self.unacceptedConnections[newConnection.getDestinationAddress()] = newConnection
+                self.lockUnacceptedConnections.release()
 
-    def shouldACK(self, packet):
-        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
-        isInBuffer = self.inputBuffer.get(packet.seqNum)
+                synAckPacket = RDTPacket.makeSYNACKPacket(
+                    newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
+                self.socket.sendto(synAckPacket.serialize(), address)
 
-        return isOldPacket or isInBuffer
+                logging.info(
+                    "Sent server sequence number: {} y ACK number {}".format(
+                        newConnection.seqNum, newConnection.ackNum))
 
-    def waitForPackets(self):
-        self.receivingThread = Thread(target=self.waitForPacketsThread)
-        self.receivingThread.daemon = True  # Closes with the main thread
-        self.receivingThread.start()
-        return
+            elif(packet.isSYN() and not self.isNewClient(address)):
+                logging.info(
+                    "Requested connection from [{}:{}] already connected".format(
+                        *address))
+                newConnection = self.getClient(address)
+                synAckPacket = RDTPacket.makeSYNACKPacket(
+                    newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
+                self.socket.sendto(synAckPacket.serialize(), address)
+                logging.info(
+                    "Resending SYNACK server sequence number: {} y ACK number {}".format(
+                        newConnection.seqNum, newConnection.ackNum))
 
-    def waitForPacketsThread(self):
-        logging.debug("Waiting for packets...")
-        self.socket.settimeout(1)
+    """
+        It's used by the server.
+        Checks if client (address) was connected previously
+    """
+    def isNewClient(self, address):
+        self.lockUnacceptedConnections.acquire()
+        unaccepted = address in self.unacceptedConnections
+        self.lockUnacceptedConnections.release()
 
-        while not self.requestedClose:
-            try:
-                packet = self._recv(MSS)
-            except timeout:
-                continue  # Se chequea la condicion del while nuevamente
+        self.lockAcceptedConnections.acquire()
+        accepted = address in self.acceptedConnections
+        self.lockAcceptedConnections.release()
 
-            if packet.isACK():
-                logging.debug("Client({}:{}), Received ACK Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
-                self.updateOutPutWindow(packet.ackNum)
-            elif packet.isFIN():
-                logging.debug("Client({}:{}), Received FIN Packet".format(self.destIP,self.destPort))
-                self.requestedClose = True
-                finAckPacket = RDTPacket.makeFINACKPacket()
-                self._send(finAckPacket)
-            else:
-                if(self.shouldAddToInputBuffer(packet)):
-                    logging.debug("Client({}:{}), Received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
-                    self.inputBuffer[packet.seqNum] = packet
-                    ackPacket = RDTPacket.makeACKPacket(
-                        packet.seqNum + len(packet.data))
-                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
-                    self._send(ackPacket)
-                elif(self.shouldACK(packet)):  # ACK paquetes retransmitidos
-                    logging.debug("Client({}:{}), Received retransmited Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
-                    ackPacket = RDTPacket.makeACKPacket(
-                        packet.seqNum + len(packet.data))
-                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
-                    self._send(ackPacket)
-                else:
-                    logging.debug("Client({}:{}), Discarding received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
-            
-        return
+        return not unaccepted and not accepted
 
+    """
+        It's used by the server.
+        Looks for a previously established connection
+    """
+    def getClient(self, clientAddress):
+        self.lockUnacceptedConnections.acquire()
+        client = self.unacceptedConnections.get(clientAddress)
+        self.lockUnacceptedConnections.release()
+        if(client is None):
+            self.lockAcceptedConnections.acquire()
+            client = self.acceptedConnections.get(clientAddress)
+            self.lockAcceptedConnections.release()
+
+        return client
+
+    """
+        It's used by the server.
+        Creates a new connection in order to handle a new client communication
+    """
+    def createConnection(self, clientAddress, initialAckNum):
+        newConnection = RDTSocketSR()
+        newConnection.bind((self.srcIP, 0))
+        newConnection.socket.settimeout(2)  # 2 second timeout
+        newConnection.setDestinationAddress(clientAddress)
+        newConnection.ackNum = initialAckNum
+        newConnection.mainSocket = self
+        newConnection.waitForPackets()
+        return newConnection
+
+    def getAmountOfPendingConnections(self):
+        self.lockUnacceptedConnections.acquire()
+        n = len(self.unacceptedConnections)
+        self.lockUnacceptedConnections.release()
+        return n
+
+    def unacceptedConnectionsIsEmpty(self):
+        self.lockUnacceptedConnections.acquire()
+        isEmpty = not self.unacceptedConnections
+        self.lockUnacceptedConnections.release()
+        return isEmpty
+
+    """
+        It's used by the server.
+        Pops an unaccepted connection from 'self.unacceptedConnections' and returns it
+    """
+    def popUnacceptedConnection(self):
+        self.lockUnacceptedConnections.acquire()
+        # Obtains the first key value pair in 'unacceptedConnections'
+        addr, connection = next(iter(self.unacceptedConnections.items()))
+        del self.unacceptedConnections[addr]
+        self.lockUnacceptedConnections.release()
+        return (addr, connection)
+
+    """
+        It's used by the server
+        Pops the first socket from the 'unacceptedConnections'
+        If list is empty, blocks the thread until there is a socket avaiable
+    """
+    def accept(self):
+        logging.debug("Waiting for new connections")
+
+        while(self.unacceptedConnectionsIsEmpty()):
+            # TODO: HORRIBLE!!!!!!!!
+            time.sleep(0.2)
+        logging.debug("Accepted connection")
+
+        addr, connection = self.popUnacceptedConnection()
+
+        self.lockAcceptedConnections.acquire()
+        self.acceptedConnections[addr] = connection
+        self.lockAcceptedConnections.release()
+        return (connection, addr)
+
+
+    ##################
+    #   Client API   #
+    ##################
+
+    """
+        It's used only by the Client.
+        Performs the 2whs in Stop and Wait manner, it doesn't use piggyback
+    """
     def connect(self, destAddr):
         self.destIP, self.destPort = destAddr
 
@@ -169,181 +255,67 @@ class RDTSocketSR:
             raise TimeOutException
 
         self.ackNum = synAckPacket.seqNum
-        # El cliente ahora apunta al socket especifico de la conexión en vez de
-        # al listen
+
+        # Change the server service port
         self.destPort = int(synAckPacket.data.decode())
         logging.info("Connected to: {}:{}".format(*destAddr))
         self.waitForPackets()
         return True
-    """
-        Se utiliza para asignarle una dirección especifica al socket (generalmente al socket del listen del servidor),
-        también se usa cuando se crea un socket para el cliente en el servidor
-    """
 
-    def bind(self, address):
-        ip, port = address
-        self.srcIP = ip
-        self.srcPort = port
-        self.socket.bind(address)
-        self.srcPort = self.socket.getsockname()[1]
 
-    """
-        Se ejecuta del lado del servidor,
-        crea un hilo donde se queda escuchando a nuevos clientes.
-    """
+    #########################
+    #   COMMUNICATION API   #
+    #########################
+    receivingThread = None
+    lockInputBuffer = Lock()
+    inputBuffer = {}
+    lockOutPutWindow = Lock()
+    outPutWindow = []
 
-    def listen(self, maxQueuedConnections):
-        listeningThread = Thread(target=self.listenThread,
-                                 args=(maxQueuedConnections,))
-        listeningThread.daemon = True  # Closes with the main thread
-        self.listening = True
-        listeningThread.start()
-        logging.debug("Now server is listening...")
+    def updateOutPutWindow(self, ackNum):
+        # If is present, change the ACK boolean in OutPutWindow for that element
+        self.outPutWindow = [
+            (x[0], x[1] or self.matchesACK(
+                x[0], ackNum)) for x in self.outPutWindow]
 
-    def isNewClient(self, address):
-        self.lockUnacceptedConnections.acquire()
-        unaccepted = address in self.unacceptedConnections
-        self.lockUnacceptedConnections.release()
-
-        self.lockAcceptedConnections.acquire()
-        accepted = address in self.acceptedConnections
-        self.lockAcceptedConnections.release()
-
-        return not unaccepted and not accepted
-
-    def getClient(self, clientAddress):
-        self.lockUnacceptedConnections.acquire()
-        client = self.unacceptedConnections.get(clientAddress)
-        self.lockUnacceptedConnections.release()
-        if(client is None):
-            self.lockAcceptedConnections.acquire()
-            client = self.acceptedConnections.get(clientAddress)
-            self.lockAcceptedConnections.release()
-
-        return client
+        # Remove all cumulative ACKed packets from outPutWindow
+        while(self.outPutWindow and self.outPutWindow[0][1]):
+            self.outPutWindow.pop(0)
 
     """
-        Se ejecuta del lado del servidor,
-        realiza el two way handshake con el cliente y crea un socket nuevo para la conexión.
-
-        Si recibe un mensaje "SYN" crea un socket en unacceptedConnections,
+        Checks if a packet should be added to input buffer.
+        If it's the inmmediate expected packet ignores other conditions
     """
-
-    def listenThread(self, maxQueuedConnections):
-        # si está llena acceptedConnections deberíamos quedarnos en un while
-        # esperando que se vacíe, no hacer otra cosa
-        while(self.listening):
-            data, address = self.socket.recvfrom(MSS)
-            packet = RDTPacket.fromSerializedPacket(data)
-
-            if(packet.isSYN() and self.isNewClient(address)):
-                logging.info(
-                    "Requested connection from [{}:{}]".format(
-                        *address))
-                if(self.getAmountOfPendingConnections() >= maxQueuedConnections):
-                    logging.info(
-                        "Requested connection [{}:{}] refused".format(
-                            *address))
-                    continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
-
-                newConnection = self.createConnection(address, packet.seqNum)
-
-                self.lockUnacceptedConnections.acquire()
-                self.unacceptedConnections[newConnection.getDestinationAddress(
-                )] = newConnection
-                self.lockUnacceptedConnections.release()
-
-                synAckPacket = RDTPacket.makeSYNACKPacket(
-                    newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
-                self.socket.sendto(synAckPacket.serialize(), address)
-
-                logging.info(
-                    "Sent server sequence number: {} y ACK number {}".format(
-                        newConnection.seqNum, newConnection.ackNum))
-
-            elif(packet.isSYN() and not self.isNewClient(address)):
-                logging.info(
-                    "Requested connection from [{}:{}] already connected".format(
-                        *address))
-                newConnection = self.getClient(address)
-                synAckPacket = RDTPacket.makeSYNACKPacket(
-                    newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
-                self.socket.sendto(synAckPacket.serialize(), address)
-                logging.info(
-                    "Resending SYNACK server sequence number: {} y ACK number {}".format(
-                        newConnection.seqNum, newConnection.ackNum))
-    """
-        Lo ejecuta el servidor para crear un socket nuevo para la comunicación con el cliente
-    """
-
-    def createConnection(self, clientAddress, initialAckNum):
-        newConnection = RDTSocketSR()
-        newConnection.bind(('', 0))
-        newConnection.socket.settimeout(2)  # 2 second timeout
-        newConnection.setDestinationAddress(clientAddress)
-        newConnection.ackNum = initialAckNum
-        newConnection.mainSocket = self
-        newConnection.waitForPackets()
-        return newConnection
-
-    def getDestinationAddress(self):
-        return (self.destIP, self.destPort)
-
-    def getAmountOfPendingConnections(self):
-        self.lockUnacceptedConnections.acquire()
-        n = len(self.unacceptedConnections)
-        self.lockUnacceptedConnections.release()
-        return n
-
-    def unacceptedConnectionsIsEmpty(self):
-        self.lockUnacceptedConnections.acquire()
-        isEmpty = not self.unacceptedConnections
-        self.lockUnacceptedConnections.release()
-        return isEmpty
-
-    def popUnacceptedConnection(self):
-        self.lockUnacceptedConnections.acquire()
-        # Obtengo primer key value pair en el diccionario
-        addr, connection = next(iter(self.unacceptedConnections.items()))
-        del self.unacceptedConnections[addr]
-        self.lockUnacceptedConnections.release()
-        return (addr, connection)
+    def shouldAddToInputBuffer(self, packet):
+        alreadyInBuffer = self.inputBuffer.get(packet.seqNum) is not None
+        isInputBufferFull = len(self.inputBuffer) >= INPUT_BUFFER_SIZE
+        isExpectedPacket = self.ackNum == packet.seqNum
+        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
+        return isExpectedPacket or (
+            not isInputBufferFull and not alreadyInBuffer and not isOldPacket)
 
     """
-        Poppea el primer socket de la lista unacceptedConnections[],
-        si la lista está vacía, bloquea el hilo de ejecución hasta que haya un socket disponible.
+        Checks if a packet should by ACKed
     """
+    def shouldACK(self, packet):
+        isOldPacket = self.ackNum >= packet.seqNum + len(packet.data)
+        isInBuffer = self.inputBuffer.get(packet.seqNum)
 
-    def accept(self):
-        logging.debug("Waiting for new connections")
-
-        while(self.unacceptedConnectionsIsEmpty()):
-            time.sleep(0.2)
-        logging.debug("Accepted connection")
-
-        addr, connection = self.popUnacceptedConnection()
-
-        self.lockAcceptedConnections.acquire()
-        self.acceptedConnections[addr] = connection
-        self.lockAcceptedConnections.release()
-        return (connection, addr)
-
-    def _recv(self, bufsize):
-        receivedSuccessfully = False
-        data, addr = (None, None)
-        while(not receivedSuccessfully):
-            data, addr = self.socket.recvfrom(bufsize + self.RDTHEADER)
-            receivedSuccessfully = self.matchDestAddr(addr)
-        return RDTPacket.fromSerializedPacket(data)
-
-    def _send(self, packet):
-        return self.socket.sendto(
-            packet.serialize(), (self.destIP, self.destPort))
+        return isOldPacket or isInBuffer
 
     """
-        WORK IN PROGRESS
+        Finds the packet in outPutWindow that matchs that seqNum and returns
+            the tuple (packet, wasACKed boolean)
     """
+    def findPacket(self, seqNum):
+        for tuplePacketAck in self.outPutWindow:
+            if(tuplePacketAck[0].seqNum == seqNum):
+                return tuplePacketAck
+        return None
 
+    """
+        Checks if a sent packet's sequence number was ACKed 
+    """
     def wasACKED(self, seqNum):
         tuplePacketAck = self.findPacket(seqNum)
         if tuplePacketAck is not None:
@@ -355,22 +327,114 @@ class RDTSocketSR:
     def outPutWindowIsFull(self):
         return len(self.outPutWindow) == WINDOWSIZE
 
-    def findPacket(self, seqNum):
-        for tuplePacketAck in self.outPutWindow:
-            if(tuplePacketAck[0].seqNum == seqNum):
-                return tuplePacketAck
-        return None
 
-    def resend(self, seqNum):
-        if(not self.wasACKED(seqNum)):
-            tuplePacketAck = self.findPacket(seqNum)
-            if(tuplePacketAck is not None and tuplePacketAck[0] is not None):
-                logging.debug("Resending Packet(seqno={},ackno={}, ack?=no, l={})".format(tuplePacketAck[0].seqNum, tuplePacketAck[0].ackNum, len(tuplePacketAck[0].data)))
-                self._send(tuplePacketAck[0])
-                timerThread = Timer(RESEND_TIME, self.resend, (seqNum,))
-                timerThread.daemon = True
-                timerThread.start()
+    #####################
+    #   * Receive API   #
+    #####################
 
+    """
+        Receives using UDP socket
+        Returns the first received packet that belongs to the connection
+    """
+    def _recv(self, bufsize):
+        receivedSuccessfully = False
+        data, addr = (None, None)
+        while(not receivedSuccessfully):
+            data, addr = self.socket.recvfrom(bufsize + RDTHEADER)
+            receivedSuccessfully = self.matchDestAddr(addr)
+        return RDTPacket.fromSerializedPacket(data)
+
+    """
+        It's used by the Client/Client-Server
+        Creates a thread with 'waitForPacketsThread' function
+        * It's called in connect by Client
+        * It's called in createConnection by Client-Server
+    """
+    def waitForPackets(self):
+        self.receivingThread = Thread(target=self.waitForPacketsThread)
+        self.receivingThread.daemon = True  # Closes with the main thread
+        self.receivingThread.start()
+        return
+
+    """
+        It's used by the Client/Client-Server
+        Loops receiving every packet that arrives to 'self.socket'
+            and handles it.
+        * If is FIN then 'interrupt' the connection
+        * If is ACK then update outPutWindow
+        * Else adds packets to InputBuffer if its necessary and
+            sends an ACK, or discards it.
+    """
+    def waitForPacketsThread(self):
+        logging.debug("Waiting for packets...")
+        self.socket.settimeout(1)
+
+        while not self.requestedClose:
+            try:
+                packet = self._recv(MSS)
+            except timeout:
+                continue  # Checks while condition again
+
+            if packet.isACK():
+                logging.debug("Client({}:{}), Received ACK Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
+                self.updateOutPutWindow(packet.ackNum)
+            elif packet.isFIN():
+                logging.debug("Client({}:{}), Received FIN Packet".format(self.destIP,self.destPort))
+                self.requestedClose = True
+                ackPacket = RDTPacket.makeACKPacket(self.ackNum)
+                self._send(ackPacket)
+            else:
+                if(self.shouldAddToInputBuffer(packet)):
+                    logging.debug("Client({}:{}), Received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
+                    self.inputBuffer[packet.seqNum] = packet
+                    ackPacket = RDTPacket.makeACKPacket(
+                        packet.seqNum + len(packet.data))
+                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
+                    self._send(ackPacket)
+                elif(self.shouldACK(packet)):  # ACK paquetes retransmitidos
+                    logging.debug("Client({}:{}), Received retransmited Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
+                    ackPacket = RDTPacket.makeACKPacket(
+                        packet.seqNum + len(packet.data))
+                    logging.debug("Client({}:{}), Sending Packet(seqno={}, ackno={}, ack?=yes, l={})".format(self.destIP, self.destPort, ackPacket.seqNum, ackPacket.ackNum, len(ackPacket.data)))
+                    self._send(ackPacket)
+                else:
+                    logging.debug("Client({}:{}), Discarding received Packet(seqno={}, ackno={}, ack?=no, l={})".format(self.destIP,self.destPort, packet.seqNum, packet.ackNum, len(packet.data)))
+
+    """
+        Implements the RECV selective repeat protocol
+        Returns next expected (in order) packet's payload
+    """
+    def recvSelectiveRepeat(self, bufsize):
+        logging.debug("Waiting for packet {}".format(self.ackNum))
+        while(not self.inputBuffer.get(self.ackNum) and not self.requestedClose):
+            time.sleep(0.1)
+
+        if(self.requestedClose):
+            return b''
+
+        packet = self.inputBuffer.get(self.ackNum)
+        del self.inputBuffer[self.ackNum]
+        self.ackNum = self.ackNum + len(packet.data)
+        return packet.data
+
+
+    ##################
+    #   * Send API   #
+    ##################
+    
+    """
+        Sends a rdtpacket using UDP socket
+    """
+    def _send(self, packet):
+        return self.socket.sendto(
+            packet.serialize(), (self.destIP, self.destPort))
+
+    """
+        Implements the SEND selective repeat protocol.
+        Starts a resend-timer for every packet sent, calls 'resend' function
+            after timer's timeout
+        Returns the amount of bytes 'sent'.
+    """
     def sendSelectiveRepeat(self, bytes):
         if(self.isClosed):
             return 0
@@ -391,19 +455,35 @@ class RDTSocketSR:
         self.seqNum += len(bytes)
         return len(bytes)
 
-    def recvSelectiveRepeat(self, bufsize):
-        logging.debug("Waiting for packet {}".format(self.ackNum))
-        while(not self.inputBuffer.get(self.ackNum) and not self.requestedClose):
-            time.sleep(0.1)
+    """
+        Implements the selective repeat retransmission
+        Will be executed after some time, checking if an ACK was
+            received for the corresponding packet.
+            If not, then resends the packet and restars the timer
+    """
+    def resend(self, seqNum):
+        if(not self.wasACKED(seqNum)):
+            tuplePacketAck = self.findPacket(seqNum)
+            if(tuplePacketAck is not None and tuplePacketAck[0] is not None):
+                logging.debug("Resending Packet(seqno={},ackno={}, ack?=no, l={})".format(tuplePacketAck[0].seqNum, tuplePacketAck[0].ackNum, len(tuplePacketAck[0].data)))
+                self._send(tuplePacketAck[0])
+                timerThread = Timer(RESEND_TIME, self.resend, (seqNum,))
+                timerThread.daemon = True
+                timerThread.start()
 
-        if(self.requestedClose):
-            return b''
+    ###################
+    #   * Close API   #
+    ###################
 
-        packet = self.inputBuffer.get(self.ackNum)
-        del self.inputBuffer[self.ackNum]
-        self.ackNum = self.ackNum + len(packet.data)
-        return packet.data
+    # WORK IN PROGRESS!!!
 
+    requestedClose = False
+    isClosed = False
+
+    """
+        Used in close function.
+        Sends a FIN packet with Stop and Wait protocol
+    """
     def sendFIN(self):
         receivedAck = False
         bytesSent = 0
@@ -414,7 +494,7 @@ class RDTSocketSR:
                 self.destIP, self.destPort))
         while(not receivedAck and tries > 0):
             try:
-                packetSent = RDTPacket.makeFINPacket()
+                packetSent = RDTPacket.makeFINPacket(self.seqNum, self.ackNum)
                 bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))
 
@@ -442,6 +522,11 @@ class RDTSocketSR:
                 tries -= 1
         return bytesSent
 
+    """
+        Used in close function
+        Waits for FIN from the other part of the connection
+        Discards other packets that aren't FIN
+    """
     def recvFIN(self):
         receivedSuccessfully = False
         receivedPacket = None
@@ -462,6 +547,10 @@ class RDTSocketSR:
 
         return receivedPacket.data
 
+    """
+        Used in Server Socket
+        Closes  
+    """
     def closeConnectionSocket(self, destinationAddress):
 
         self.lockUnacceptedConnections.acquire()
@@ -475,10 +564,15 @@ class RDTSocketSR:
         self.lockAcceptedConnections.release()
 
     def close(self):
+
         if(self.listening):  # Es main server socket
             #TODO: listen close
             self.listening = False
+            # Join listen thread
             self.isClosed = True
+            # Join the other threads
+            # Close unaccepted sockets running
+            logging.debug("Closing server socket")
             self.socket.close()
             return
 
@@ -488,15 +582,16 @@ class RDTSocketSR:
         else:
             while(self.outPutWindow):
                 time.sleep(0.2)
-            self.requestedClose = True
+            self.isClosed = True
             self.receivingThread.join()  # Espera al timeout del hilo del recv
             self.sendFIN()
             self.recvFIN()
 
+        # ServerClient socket should be deleted of Server socket list
         if(self.mainSocket is not None):
             self.mainSocket.closeConnectionSocket((self.destIP, self.destPort))
 
-        self.isClosed = True
+        logging.debug("Closing socket")
         self.socket.close()
         
         #si recibo fin -> send fin 10 tries -> close definitivo
