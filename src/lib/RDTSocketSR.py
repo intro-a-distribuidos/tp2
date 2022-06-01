@@ -2,7 +2,7 @@ import time
 import logging
 import random
 
-from lib.exceptions import TimeOutException
+from lib.exceptions import LostConnetion, TimeOutException
 from threading import Lock, Thread, Timer
 from socket import socket, AF_INET, SOCK_DGRAM, SHUT_RD, timeout
 from lib.RDTPacket import RDTPacket
@@ -10,8 +10,8 @@ from sys import getsizeof
 
 
 MSS = 1500
-WINDOWSIZE = 2
-INPUT_BUFFER_SIZE = 4
+WINDOWSIZE = 10
+INPUT_BUFFER_SIZE = 44 # UDP buffer size = 65535, 44 MSS
 RESEND_TIME = 0.5
 RDTHEADER = 11
 NRETRIES = 17 # see doc, jgarcia@fi.uba.ar, sperez@fi.uba.ar
@@ -35,6 +35,8 @@ class RDTSocketSR:
     ackNum = 0
     socket = None  # Underlying UDP socket
 
+    lostConnection = False
+
     def getDestinationAddress(self):
         return (self.destIP, self.destPort)
 
@@ -50,6 +52,7 @@ class RDTSocketSR:
     #####################################
     mainSocket = None
     listening = False
+    listeningThread = None
     lockUnacceptedConnections = Lock()
     unacceptedConnections = {}          # Waiting for accept socket map
 
@@ -79,11 +82,11 @@ class RDTSocketSR:
         Create a thread where it will listen for new connections
     """
     def listen(self, maxQueuedConnections):
-        listeningThread = Thread(target=self.listenThread,
-                                 args=(maxQueuedConnections,))
-        listeningThread.daemon = True  # Closes with the main thread
+        self.listeningThread = Thread(target=self.listenThread,
+                                      args=(maxQueuedConnections,))
+        self.listeningThread.daemon = True  # Closes with the main thread
         self.listening = True
-        listeningThread.start()
+        self.listeningThread.start()
         logging.debug("Now server is listening...")
 
     """
@@ -94,8 +97,14 @@ class RDTSocketSR:
     def listenThread(self, maxQueuedConnections):
         # TODO?: si está llena acceptedConnections deberíamos quedarnos en un while
         # esperando que se vacíe, no hacer otra cosa
+        self.socket.settimeout(1)
+        data, address = (None, None)
+
         while(self.listening):
-            data, address = self.socket.recvfrom(MSS)
+            try:
+                data, address = self.socket.recvfrom(MSS)
+            except timeout:
+                continue  # Checks while condition again
             packet = RDTPacket.fromSerializedPacket(data)
 
             if(packet.isSYN() and self.isNewClient(address)):
@@ -414,20 +423,20 @@ class RDTSocketSR:
         logging.debug("Waiting for packet {}".format(self.ackNum))
         while(not self.inputBuffer.get(self.ackNum) and not self.requestedClose):
             time.sleep(0.1)
+        
+        if(self.inputBuffer.get(self.ackNum)):
+            packet = self.inputBuffer.get(self.ackNum)
+            del self.inputBuffer[self.ackNum]
+            self.ackNum = self.ackNum + len(packet.data)
+            return packet.data
 
         if(self.requestedClose):
             return b''
 
-        packet = self.inputBuffer.get(self.ackNum)
-        del self.inputBuffer[self.ackNum]
-        self.ackNum = self.ackNum + len(packet.data)
-        return packet.data
-
-
     ##################
     #   * Send API   #
     ##################
-    
+
     """
         Sends a rdtpacket using UDP socket
     """
@@ -449,9 +458,10 @@ class RDTSocketSR:
             logging.debug("outPutWindow is full, waiting for ACKs")
 
         while self.outPutWindowIsFull():
-            if(self.serompiotodo):
-                raise RuntimeError
             time.sleep(0.2)
+
+        if(self.lostConnection):
+            raise LostConnetion
 
         packetSent = RDTPacket(self.seqNum, self.ackNum, False, False, False, bytes)
         logging.debug("Sending Packet(seqno={},ackno={}, ack?=no, l={})".format(packetSent.seqNum, packetSent.ackNum, len(packetSent.data)))
@@ -469,12 +479,13 @@ class RDTSocketSR:
             received for the corresponding packet.
             If not, then resends the packet and restars the timer
     """
-    serompiotodo = False
+    
     def resend(self, seqNum, tries=NRETRIES):
         if(self.isClosed or self.receivedFINACK):
             return
         if(tries <= 0):
-            self.serompiotodo = True
+            self.lostConnection = True
+            self.outPutWindow = []
             return
         if(not self.wasACKED(seqNum)):
             tuplePacketAck = self.findPacket(seqNum)
@@ -583,7 +594,7 @@ class RDTSocketSR:
             packetFIN = RDTPacket.makeFINPacket(self.seqNum, self.ackNum)
             logging.debug("Sending FIN Packet(seqno={}, ackno={}, l={}".format(packetFIN.seqNum, packetFIN.ackNum, len(packetFIN.data)))
             self._send(packetFIN)
-            tries-=1
+            tries -= 1
 
             # Es como el timer... no es taaan horrible
             time.sleep(1)
@@ -592,7 +603,8 @@ class RDTSocketSR:
         while(self.outPutWindow):
             time.sleep(0.2)
 
-        self.sendFIN()
+        if(not self.lostConnection):
+            self.sendFIN()
         self.isClosed = True
         # ServerClient socket should be deleted of Server socket list
         if(self.mainSocket is not None):
@@ -603,17 +615,22 @@ class RDTSocketSR:
         self.socket.close()
 
     def closeReceiver(self):
+        if(self.mainSocket is not None):
+            self.mainSocket.closeConnectionSocket((self.destIP, self.destPort))
         self.requestedClose = True
         self.receivingThread.join()
         self.socket.close()
 
     def closeServer(self):
-        #TODO: listen close
         self.listening = False
-        # Join listen thread
         self.isClosed = True
-        # Join the other threads
+        # Join listen thread
+        self.listeningThread.join()
         # Close unaccepted sockets running
+        for _, conn in self.unacceptedConnections.items():
+            conn.requestedClose = True
+            conn.receivingThread.join()
+            conn.socket.close()
+
         logging.debug("Closing server socket")
         self.socket.close()
-        return
