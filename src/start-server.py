@@ -3,10 +3,14 @@ import pathlib
 import logging
 import sys
 import os
-from FileTransfer import FileTransfer, Packet
-from threading import Thread
-from lib.RDTSocketSR import RDTSocketSR
 
+from FileTransfer import FileTransfer, Packet
+from threading import Thread, Lock
+from lib.RDTSocketSR import RDTSocketSR
+from lib.RDTSocketSW import RDTSocketSW
+
+RDT_SR = 1
+RDT_SW = 2
 
 def getArgs():
     parser = argparse.ArgumentParser()
@@ -55,17 +59,40 @@ def getArgs():
         metavar='',
         help='decrease output verbosity')
 
+    rdt = optionals.add_mutually_exclusive_group()
+    rdt.add_argument(
+        '-sr',
+        '--selective-repeat',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SR,
+        default=1,
+        metavar='',
+        help='use Selective Repeat how RDT method')
+    rdt.add_argument(
+        '-sw',
+        '--stop-and-wait',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SW,
+        default=1,
+        metavar='',
+        help='use Stop and Wait how RDT method')
+
     return parser.parse_args()
 
 
 args = getArgs()
 
+
 SERVER_PORT = 12000
 DIR_PATH = "server_files"
+connections = []
+openFiles = []
+lockOpenFiles = Lock()
 
 
-def start_server():
-    serverSocket = RDTSocketSR()
+def start_server(serverSocket):
     serverSocket.bind(('', SERVER_PORT))
     serverSocket.listen(1)
     try:
@@ -86,7 +113,7 @@ def start_server():
 
 def client_handle(connSocket, addr):
 
-    bytes = connSocket.recvSelectiveRepeat()
+    bytes = connSocket.recv()
 
     if (bytes == b''):
         logging.debug("El Cliente corto la conexion")
@@ -95,8 +122,7 @@ def client_handle(connSocket, addr):
 
     packet = Packet.fromSerializedPacket(bytes)
     file_size = packet.size
-    file_name = packet.name.decode().rstrip("\x00")
-
+    file_name = packet.name.decode()
     logging.debug(
         "Cliente:{} envio Paquete de config:type->{}, size->{},name->{}".format(
             addr,
@@ -104,18 +130,33 @@ def client_handle(connSocket, addr):
             file_size,
             file_name))
 
+
+    lockOpenFiles.acquire()
+    if file_name in openFiles:
+        FileTransfer.request(connSocket,FileTransfer.BUSY_FILE,file_name,0)
+        lockOpenFiles.release()
+        connSocket.closeReceiver()
+        return
+
+    else:
+        openFiles.append(file_name)
+        FileTransfer.request(connSocket,FileTransfer.OK,file_name,0)
+    lockOpenFiles.release()
+
     if packet.type == FileTransfer.RECEIVE:
         logging.debug(
             "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
         # Si el cliente quiere recibir un archivo -> Servidor debe enviar
-        FileTransfer.send_file(connSocket, addr, DIR_PATH + '/' + file_name)
+        connections.append((connSocket,FileTransfer.SEND))
+        FileTransfer.send_file(connSocket, addr, DIR_PATH + '/' + file_name) 
         connSocket.closeSender()
 
     elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
         logging.debug(
             "Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
         # Si el cliente quiere enviar un archivo -> Servidor debe recibir
-        FileTransfer.recv_file(connSocket, addr, DIR_PATH + '/' + file_name)
+        connections.append((connSocket,FileTransfer.RECEIVE))
+        FileTransfer.recv_file(connSocket, addr, DIR_PATH + '/' + file_name) 
         connSocket.closeReceiver()
 
     else:
@@ -129,12 +170,29 @@ def client_handle(connSocket, addr):
     return
 
 
-logging.basicConfig(level=logging.DEBUG,  # filename="server.log",
+logging.basicConfig(level=logging.DEBUG, # filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
 
+serverSocket = None
 try:
-    start_server()
+    if  args.rdtType == RDT_SR:
+        serverSocket = RDTSocketSR()
+    else:
+        serverSocket = RDTSocketSW()
+    logging.info("Server: Welcome!!!")
+    start_server(serverSocket)
 except KeyboardInterrupt:
     print("")
+    logging.info("Server: Goodbye!!!")
+    for conn,type in connections:
+        try:
+            if type == FileTransfer.SEND:
+                conn.closeSender()
+            else:
+                conn.closeReceiver()
+        except KeyboardInterrupt:
+            print("")
+            exit()
+    serverSocket.closeServer()

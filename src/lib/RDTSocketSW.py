@@ -13,7 +13,7 @@ from sys import getsizeof
 MSS = 1500
 
 
-class RDTSocket:
+class RDTSocketSW:
     RDTHEADER = 10
     mainSocket = None
 
@@ -196,7 +196,7 @@ class RDTSocket:
     """
 
     def createConnection(self, clientAddress, initialAckNum):
-        newConnection = RDTSocket()
+        newConnection = RDTSocketSW()
         newConnection.bind(('', 0))
         newConnection.socket.settimeout(2)  # 2 second timeout
         newConnection.setDestinationAddress(clientAddress)
@@ -264,7 +264,7 @@ class RDTSocket:
         WORK IN PROGRESS
     """
 
-    def sendStopAndWait(self, bytes):
+    def send(self, bytes):
         receivedAck = False
         bytesSent = 0
         tries = 10  # Es temporal, la usamos para evitar ciclos infinitos
@@ -308,7 +308,7 @@ class RDTSocket:
                 tries -= 1
         return bytesSent
 
-    def recvStopAndWait(self, bufsize):
+    def recv(self):
         logging.info("Receiving...")
         receivedSuccessfully = False
         receivedPacket = None
@@ -316,7 +316,7 @@ class RDTSocket:
             logging.debug("Waiting for packet [{}]".format(self.ackNum))
 
             try:
-                receivedPacket = self._recv(bufsize)
+                receivedPacket = self._recv(MSS)
             except BaseException:
                 return b''
 

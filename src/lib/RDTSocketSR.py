@@ -483,7 +483,7 @@ class RDTSocketSR:
         Returns next expected (in order) packet's payload
     """
 
-    def recvSelectiveRepeat(self):
+    def recv(self):
         if(not self.inputBuffer.get(self.ackNum) and not self.requestedClose):
             logging.debug(
                 "Connection({}:{}), packet {} not received yet, waiting... ".format(
@@ -525,7 +525,7 @@ class RDTSocketSR:
         Returns the amount of bytes 'sent'.
     """
 
-    def sendSelectiveRepeat(self, bytes):
+    def send(self, bytes):
         if(self.isClosed):
             return 0
 
