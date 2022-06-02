@@ -1,5 +1,4 @@
 import argparse
-import pathlib
 import logging
 import sys
 import os
@@ -22,7 +21,7 @@ def getArgs():
         '--host',
         type=str,
         metavar='',
-        default='',
+        default='127.0.0.1',
         help='service IP address')
     optionals.add_argument(
         '-p',
@@ -34,7 +33,7 @@ def getArgs():
     optionals.add_argument(
         '-s',
         '--storage',
-        type=pathlib.Path,
+        type=str,
         metavar='',
         default='tmp',
         help='storage dir path')
@@ -84,21 +83,20 @@ def getArgs():
 
 args = getArgs()
 
-
-SERVER_PORT = 12000
-DIR_PATH = "server_files"
 connections = []
 openFiles = []
 lockOpenFiles = Lock()
 
 
 def start_server(serverSocket):
-    serverSocket.bind(('', SERVER_PORT))
+    serverSocket.bind((args.host, args.port))
     serverSocket.listen(1)
     try:
-        os.mkdir(DIR_PATH)
-    except BaseException:
+        os.makedirs(args.storage)
+    except FileExistsError:
         pass
+    except:
+        raise
 
     while True:
         connSocket, addr = serverSocket.accept()
@@ -150,7 +148,7 @@ def client_handle(connSocket, addr):
             "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
         # Si el cliente quiere recibir un archivo -> Servidor debe enviar
         connections.append((connSocket,FileTransfer.SEND))
-        FileTransfer.send_file(connSocket, addr, DIR_PATH + '/' + file_name) 
+        FileTransfer.send_file(connSocket, addr, args.storage + '/' + file_name) 
         connSocket.closeSender()
 
     elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
@@ -158,7 +156,7 @@ def client_handle(connSocket, addr):
             "Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
         # Si el cliente quiere enviar un archivo -> Servidor debe recibir
         connections.append((connSocket,FileTransfer.RECEIVE))
-        FileTransfer.recv_file(connSocket, addr, DIR_PATH + '/' + file_name) 
+        FileTransfer.recv_file(connSocket, addr, args.storage + '/' + file_name) 
         connSocket.closeReceiver()
 
     else:
@@ -202,3 +200,6 @@ except KeyboardInterrupt:
             print("")
             exit()
     serverSocket.closeServer()
+except:
+    serverSocket.closeServer()
+    exit()

@@ -4,7 +4,7 @@ from threading import Thread
 import logging
 import struct
 import os
-
+from pathlib import Path
 
 from lib.exceptions import NameNotFoundException
 from lib.RDTSocketSR import RDTSocketSR, RDTHEADER
@@ -35,7 +35,6 @@ SERVER_PORT = 12000
 
 
 class FileTransfer:
-    DIR_PATH = "server_files"
     RECEIVE = 0
     SEND = 1
     ERROR = 2
@@ -52,7 +51,8 @@ class FileTransfer:
 
     @classmethod
     def recv_file(self, connSocket, addr, file_name):
-
+        output_file = Path(file_name)
+        output_file.parent.mkdir(exist_ok=True, parents=True)
         f = open(file_name, "wb")
         bytes = b'a'
 

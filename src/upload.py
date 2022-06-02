@@ -18,7 +18,7 @@ def getArgs():
         '--host',
         type=str,
         metavar='',
-        default='',
+        default='127.0.0.1',
         help='server IP address')
     optionals.add_argument(
         '-p',
@@ -32,7 +32,7 @@ def getArgs():
         '--src',
         type=str,
         metavar='',
-        default='',
+        default='file',
         help='source file path')
     optionals.add_argument(
         '-n',
@@ -103,7 +103,7 @@ if  args.rdtType == RDT_SR:
     client_socket = RDTSocketSR()
 else:
     client_socket = RDTSocketSW()
-client_socket.connect(('127.0.0.1', 12000))
+client_socket.connect((args.host, args.port))
 
 
 # Envio el primer mensaje de configuracion al servidor
@@ -112,22 +112,18 @@ client_socket.connect(('127.0.0.1', 12000))
 #        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
 #        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
 #       )
-packet = Packet(
-    1,
-    0,
-    'Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg'.encode()).serialize()
-messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.send(messaje)
+queryPacket = Packet(1, 0, args.name.encode()).serialize()
+client_socket.send(queryPacket)
 
-packet = Packet.fromSerializedPacket(client_socket.recv())
+responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
-if packet.type == FileTransfer.BUSY_FILE:
+if responsePacket.type == FileTransfer.BUSY_FILE:
     logging.info(" The file you are trying to access is currently busy")
     client_socket.closeReceiver()
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 
-FileTransfer.send_file(client_socket, '1', 'client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
+FileTransfer.send_file(client_socket, '1', args.src)
 client_socket.closeSender()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)
