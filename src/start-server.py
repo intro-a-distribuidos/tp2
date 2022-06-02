@@ -2,7 +2,10 @@ import argparse
 import pathlib
 import logging
 import sys
-from FileTransfer import FileTransfer
+import os
+from FileTransfer import FileTransfer, Packet
+from threading import Thread
+from lib.RDTSocketSR import RDTSocketSR
 
 
 def getArgs():
@@ -57,11 +60,81 @@ def getArgs():
 
 args = getArgs()
 
+SERVER_PORT = 12000
+DIR_PATH = "server_files"
+
+
+def start_server():
+    serverSocket = RDTSocketSR()
+    serverSocket.bind(('', SERVER_PORT))
+    serverSocket.listen(1)
+    try:
+        os.mkdir(DIR_PATH)
+    except BaseException:
+        pass
+
+    while True:
+        connSocket, addr = serverSocket.accept()
+        connThread = Thread(
+            target=client_handle, args=(
+                connSocket, addr))
+        connThread.daemon = True
+        logging.debug("Iniciando conexion... addr:{}".format(addr))
+        connThread.start()
+    return
+
+
+def client_handle(connSocket, addr):
+
+    bytes = connSocket.recvSelectiveRepeat()
+
+    if (bytes == b''):
+        logging.debug("El Cliente corto la conexion")
+        connSocket.closeReceiver()
+        return
+
+    packet = Packet.fromSerializedPacket(bytes)
+    file_size = packet.size
+    file_name = packet.name.decode().rstrip("\x00")
+
+    logging.debug(
+        "Cliente:{} envio Paquete de config:type->{}, size->{},name->{}".format(
+            addr,
+            packet.type,
+            file_size,
+            file_name))
+
+    if packet.type == FileTransfer.RECEIVE:
+        logging.debug(
+            "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
+        # Si el cliente quiere recibir un archivo -> Servidor debe enviar
+        FileTransfer.send_file(connSocket, addr, DIR_PATH + '/' + file_name)
+        connSocket.closeSender()
+
+    elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
+        logging.debug(
+            "Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
+        # Si el cliente quiere enviar un archivo -> Servidor debe recibir
+        FileTransfer.recv_file(connSocket, addr, DIR_PATH + '/' + file_name)
+        connSocket.closeReceiver()
+
+    else:
+        logging.debug(
+            "Cliente:{} solicito una operacion INVALIDA".format(addr))
+        connSocket.closeReceiver()
+        return
+
+    logging.debug(
+        "La trasferencia para el cliente {}, realizo con exito".format(addr))
+    return
+
+
 logging.basicConfig(level=logging.DEBUG,  # filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
 
-
-fileTransfer = FileTransfer()
-fileTransfer.start_server()
+try:
+    start_server()
+except KeyboardInterrupt:
+    print("")

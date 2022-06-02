@@ -277,7 +277,8 @@ class RDTSocket:
                 logging.debug(
                     "Sending SEQNO [{}], ACKNO [{}]".format(
                         self.seqNum, self.ackNum))
-                packetSent = RDTPacket(self.seqNum, self.ackNum, False, False, False, bytes)
+                packetSent = RDTPacket(
+                    self.seqNum, self.ackNum, False, False, False, bytes)
                 # logging.debug(bytes)
                 bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))

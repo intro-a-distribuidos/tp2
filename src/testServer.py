@@ -14,8 +14,12 @@ serverSocket.listen(1)
 
 connSocket, addr = serverSocket.accept()
 
-for i in range(1, 12):  # de 1 a 12
-    bytes = connSocket.recvSelectiveRepeat(1500)  # 1
-    print(bytes.decode())
+while True:  # de 1 a 12
+    bytes = connSocket.recvSelectiveRepeat()  # 1
+    if(bytes != b''):
+        print(bytes.decode())
+    else:
+        break
 
-serverSocket.close()
+connSocket.closeReceiver()
+serverSocket.closeServer()
