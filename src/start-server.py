@@ -7,6 +7,7 @@ from FileTransfer import FileTransfer, Packet
 from threading import Thread
 from lib.RDTSocketSR import RDTSocketSR
 
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -62,6 +63,7 @@ args = getArgs()
 SERVER_PORT = 12000
 DIR_PATH = "server_files"
 
+
 def start_server():
     serverSocket = RDTSocketSR()
     serverSocket.bind(('', SERVER_PORT))
@@ -81,6 +83,7 @@ def start_server():
         connThread.start()
     return
 
+
 def client_handle(connSocket, addr):
 
     bytes = connSocket.recvSelectiveRepeat()
@@ -96,7 +99,10 @@ def client_handle(connSocket, addr):
 
     logging.debug(
         "Cliente:{} envio Paquete de config:type->{}, size->{},name->{}".format(
-            addr, packet.type, file_size, file_name))
+            addr,
+            packet.type,
+            file_size,
+            file_name))
 
     if packet.type == FileTransfer.RECEIVE:
         logging.debug(
@@ -104,7 +110,6 @@ def client_handle(connSocket, addr):
         # Si el cliente quiere recibir un archivo -> Servidor debe enviar
         FileTransfer.send_file(connSocket, addr, DIR_PATH + '/' + file_name)
         connSocket.closeSender()
-
 
     elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
         logging.debug(
@@ -122,6 +127,7 @@ def client_handle(connSocket, addr):
     logging.debug(
         "La trasferencia para el cliente {}, realizo con exito".format(addr))
     return
+
 
 logging.basicConfig(level=logging.DEBUG,  # filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',

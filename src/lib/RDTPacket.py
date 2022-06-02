@@ -1,6 +1,8 @@
 import struct
 
 HEADER_LENGTH = 11
+
+
 class RDTPacket:
     seqNum = 0
     ackNum = 0
@@ -39,7 +41,13 @@ class RDTPacket:
 
     @classmethod
     def makeSYNACKPacket(cls, seqNum, ackNum, newServerPort):
-        return cls(seqNum, ackNum, True, True, False, str(newServerPort).encode())
+        return cls(
+            seqNum,
+            ackNum,
+            True,
+            True,
+            False,
+            str(newServerPort).encode())
 
     @classmethod
     def makeFINPacket(cls, seqNum=0, ackNum=0):
@@ -50,8 +58,8 @@ class RDTPacket:
         return cls(seqNum, ackNum, False, True, True)
 
     def serialize(self):
-        return struct.pack("i i ? ? ? {}s".format(len(self.data)),
-                           self.seqNum, self.ackNum, self.syn, self.ack, self.fin, self.data)
+        return struct.pack("i i ? ? ? {}s".format(len(
+            self.data)), self.seqNum, self.ackNum, self.syn, self.ack, self.fin, self.data)
 
     def isSYN(self):
         return self.syn
@@ -64,6 +72,6 @@ class RDTPacket:
 
     def isFIN(self):
         return self.fin and not self.ack
-    
+
     def isFINACK(self):
         return self.fin and self.ack

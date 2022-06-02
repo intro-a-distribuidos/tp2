@@ -10,7 +10,6 @@ from lib.exceptions import NameNotFoundException
 from lib.RDTSocketSR import RDTSocketSR, RDTHEADER
 
 
-
 class Packet:
     type = 0
     size = 0
@@ -45,12 +44,12 @@ class FileTransfer:
     PAYLOAD = MSS - RDTHEADER
     CONFIG_LEN = 209
 
-    
     #   Esta funcion lee los paquetes que llegan por el socket y
     #   los escriben en el file enviado por parametro. Si el file
     #   existe lo sobreescribe.
+
     @classmethod
-    def recv_file(self, connSocket, addr,file_name):
+    def recv_file(self, connSocket, addr, file_name):
 
         f = open(file_name, "wb")
         bytes = b'a'
