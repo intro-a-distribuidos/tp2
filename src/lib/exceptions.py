@@ -3,3 +3,6 @@ class TimeOutException(Exception):
 
 class LostConnetion(Exception):
     pass
+
+class NameNotFoundException(Exception):
+    pass

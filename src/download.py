@@ -3,7 +3,7 @@ import pathlib
 from socket import AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
-
+from lib.exceptions import NameNotFoundException
 import sys
 from lib.RDTSocketSR import RDTSocketSR
 
@@ -64,10 +64,10 @@ def getArgs():
 
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG, filename="client.log",
+logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p')
-
+                    datefmt='%Y/%m/%d %I:%M:%S %p',
+                    stream=sys.stdout)
 
 ###############################################################
 #   Esto es un ejemplo de como funcionaria bajar un archivo   #
@@ -86,7 +86,7 @@ client_socket.connect(('127.0.0.1', 12000))
 #        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
 #        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
 #       )
-packet = Packet(0, 0, 'Lorem.txt'.encode()).serialize()
+packet = Packet(0, 0, 'HisLorem.txt'.encode()).serialize()
 messaje = packet  # + bytearray(1500 - len(packet)) #padding
 client_socket.sendSelectiveRepeat(messaje)
 
@@ -94,7 +94,10 @@ client_socket.sendSelectiveRepeat(messaje)
 # Envie el archivo src/test por cliente_socket
 
 FileTransfer = FileTransfer()
-FileTransfer.recv_file(client_socket, '1', 'client_files/MyLorem.txt')
-client_socket.close()
+try:
+    FileTransfer.recv_file(client_socket, '1', 'client_files/MyLorem.txt')
+except NameNotFoundException:
+    logging.debug("El archivo solicitado no existe")
+client_socket.closeReceiver()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)

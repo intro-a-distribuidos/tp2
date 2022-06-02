@@ -91,7 +91,7 @@ client_socket.connect(('127.0.0.1', 12000))
 packet = Packet(
     1,
     0,
-    'HisLorem.txt'.encode()).serialize()
+    'Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg'.encode()).serialize()
 messaje = packet  # + bytearray(1500 - len(packet)) #padding
 client_socket.sendSelectiveRepeat(messaje)
 
@@ -102,7 +102,7 @@ FileTransfer = FileTransfer()
 FileTransfer.send_file(
     client_socket,
     '1',
-    'client_files/MyLorem.txt')
+    'client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
 client_socket.closeSender()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)

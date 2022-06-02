@@ -25,17 +25,37 @@ class RDTSocketSR:
         self.seqNum = random.randint(0, 1000)
         logging.info("Initial sequence number: {}".format(self.seqNum))
 
-    # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
-    srcIP = ''  # Default source addr
-    srcPort = 0  # Default source port
-    destIP = None
-    destPort = None
+        # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
+        self.srcIP = ''  # Default source addr
+        self.srcPort = 0  # Default source port
+        self.destIP = None
+        self.destPort = None
 
-    seqNum = 0
-    ackNum = 0
-    socket = None  # Underlying UDP socket
+        self.ackNum = 0
 
-    lostConnection = False
+        self.lostConnection = False
+
+
+        self.mainSocket = None
+        self.listening = False
+        self.listeningThread = None
+        self.lockUnacceptedConnections = Lock()
+        self.unacceptedConnections = {}          # Waiting for accept socket map
+
+        self.lockAcceptedConnections = Lock()
+        self.acceptedConnections = {}            # Accepted socket map
+
+
+        self.receivingThread = None
+        self.lockInputBuffer = Lock()
+        self.inputBuffer = {}
+        self.lockOutPutWindow = Lock()
+        self.outPutWindow = []
+
+        self.receivedFINACK = False
+        self.requestedClose = False
+        self.isClosed = False
+
 
     def getDestinationAddress(self):
         return (self.destIP, self.destPort)
@@ -50,15 +70,6 @@ class RDTSocketSR:
     #####################################
     #         LISTEN/ACCEPT API         #
     #####################################
-    mainSocket = None
-    listening = False
-    listeningThread = None
-    lockUnacceptedConnections = Lock()
-    unacceptedConnections = {}          # Waiting for accept socket map
-
-    lockAcceptedConnections = Lock()
-    acceptedConnections = {}            # Accepted socket map
-
     """
         It's used by the server during creation of new socket for a client,
         Assigns the client address (obtained during handshake) on (destIP, destPort)
@@ -276,11 +287,7 @@ class RDTSocketSR:
     #########################
     #   COMMUNICATION API   #
     #########################
-    receivingThread = None
-    lockInputBuffer = Lock()
-    inputBuffer = {}
-    lockOutPutWindow = Lock()
-    outPutWindow = []
+
 
     def updateOutPutWindow(self, ackNum):
         # If is present, change the ACK boolean in OutPutWindow for that element
@@ -419,7 +426,7 @@ class RDTSocketSR:
         Implements the RECV selective repeat protocol
         Returns next expected (in order) packet's payload
     """
-    def recvSelectiveRepeat(self, bufsize):
+    def recvSelectiveRepeat(self):
         logging.debug("Waiting for packet {}".format(self.ackNum))
         while(not self.inputBuffer.get(self.ackNum) and not self.requestedClose):
             time.sleep(0.1)
@@ -501,9 +508,6 @@ class RDTSocketSR:
     ###################
 
     # WORK IN PROGRESS!!!
-    receivedFINACK = False
-    requestedClose = False
-    isClosed = False
 
     """
         Used in close function.
