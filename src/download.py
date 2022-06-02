@@ -6,9 +6,11 @@ import logging
 from lib.exceptions import NameNotFoundException
 import sys
 from lib.RDTSocketSR import RDTSocketSR
-
+from lib.RDTSocketSW import RDTSocketSW
 from pyrsistent import optional
 
+RDT_SR = 1
+RDT_SW = 2
 
 def getArgs():
     parser = argparse.ArgumentParser()
@@ -58,6 +60,27 @@ def getArgs():
         default=2,
         metavar='',
         help='decrease output verbosity')
+    
+
+    rdt = optionals.add_mutually_exclusive_group()
+    rdt.add_argument(
+        '-sr',
+        '--selective-repeat',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SR,
+        default=1,
+        metavar='',
+        help='use Selective Repeat how RDT method')
+    rdt.add_argument(
+        '-sw',
+        '--stop-and-wait',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SW,
+        default=1,
+        metavar='',
+        help='use Stop and Wait how RDT method')
 
     return parser.parse_args()
 
@@ -76,7 +99,11 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
 
 
 # Me creo que socket que me intento conectar con el servidor
-client_socket = RDTSocketSR()
+if  args.rdtType == RDT_SR:
+    client_socket = RDTSocketSR()
+else:
+    client_socket = RDTSocketSW()
+
 client_socket.connect(('127.0.0.1', 12000))
 
 
@@ -88,12 +115,15 @@ client_socket.connect(('127.0.0.1', 12000))
 #       )
 packet = Packet(0, 0, 'HisLorem.txt'.encode()).serialize()
 messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.sendSelectiveRepeat(messaje)
+client_socket.send(messaje)
 
+packet = Packet.fromSerializedPacket(client_socket.recv())
+
+if packet.type == FileTransfer.BUSY_FILE:
+    logging.info(" The file you are trying to access is currently busy")
+    client_socket.closeReceiver()
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
-
-FileTransfer = FileTransfer()
 try:
     FileTransfer.recv_file(client_socket, '1', 'client_files/MyLorem.txt')
 except NameNotFoundException:

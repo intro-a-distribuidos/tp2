@@ -39,6 +39,8 @@ class FileTransfer:
     RECEIVE = 0
     SEND = 1
     ERROR = 2
+    OK = 3
+    BUSY_FILE = 4
     MSS = 1500
 
     PAYLOAD = MSS - RDTHEADER
@@ -55,7 +57,7 @@ class FileTransfer:
         bytes = b'a'
 
         while bytes != b'':
-            bytes = connSocket.recvSelectiveRepeat()
+            bytes = connSocket.recv()
 
             if (bytes != b''):
                 packet = Packet.fromSerializedPacket(bytes)
@@ -77,13 +79,13 @@ class FileTransfer:
             logging.debug("No existe el file {}".format(file_name))
             # TODO: Enviar un paquete con el typo 2(error)
             packet = Packet(self.ERROR, 0, file_name.encode()).serialize()
-            connSocket.sendSelectiveRepeat(packet)
+            connSocket.send(packet)
             return
 
         file_bytes = f.read(self.MSS)
         while file_bytes != b'':
 
-            bytes_sent = connSocket.sendSelectiveRepeat(file_bytes)
+            bytes_sent = connSocket.send(file_bytes)
 
             if bytes_sent == b'':
                 f.close()
@@ -97,17 +99,10 @@ class FileTransfer:
 
         # Función auxiliar que arma un packet (request) y se lo manda al
         # servidor
-    def request(self, clientSocket, type, file_name, file_size=0):
-        packet = Packet(type, file_size, file_name)
-        packet = packet.serialize()
-
-        b_enviados = 0
-        while b_enviados < len(packet):
-            b_enviados += clientSocket.send(packet)
-            if b_enviados == b'':
-                logging.debug(
-                    "Error al enviar el request del socket {}".format(clientSocket))
-                break
+    @classmethod
+    def request(cls, socket, type, file_name, file_size):
+        packet = Packet(type, file_size, file_name.encode()).serialize()
+        socket.send(packet)
         return
 
     # Un socket cliente que ya haya hecho el connect a un servidor llama a

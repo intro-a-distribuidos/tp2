@@ -5,8 +5,9 @@ import logging
 
 import sys
 from lib.RDTSocketSR import RDTSocketSR
-
-
+from lib.RDTSocketSW import RDTSocketSW
+RDT_SR = 1
+RDT_SW = 2
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -61,6 +62,26 @@ def getArgs():
         metavar='',
         help='decrease output verbosity')
 
+    rdt = optionals.add_mutually_exclusive_group()
+    rdt.add_argument(
+        '-sr',
+        '--selective-repeat',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SR,
+        default=1,
+        metavar='',
+        help='use Selective Repeat how RDT method')
+    rdt.add_argument(
+        '-sw',
+        '--stop-and-wait',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SW,
+        default=1,
+        metavar='',
+        help='use Stop and Wait how RDT method')
+
     return parser.parse_args()
 
 
@@ -78,7 +99,10 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
 
 
 # Me creo que socket que me intento conectar con el servidor
-client_socket = RDTSocketSR()
+if  args.rdtType == RDT_SR:
+    client_socket = RDTSocketSR()
+else:
+    client_socket = RDTSocketSW()
 client_socket.connect(('127.0.0.1', 12000))
 
 
@@ -93,16 +117,17 @@ packet = Packet(
     0,
     'Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg'.encode()).serialize()
 messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.sendSelectiveRepeat(messaje)
+client_socket.send(messaje)
 
+packet = Packet.fromSerializedPacket(client_socket.recv())
+
+if packet.type == FileTransfer.BUSY_FILE:
+    logging.info(" The file you are trying to access is currently busy")
+    client_socket.closeReceiver()
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 
-FileTransfer = FileTransfer()
-FileTransfer.send_file(
-    client_socket,
-    '1',
-    'client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
+FileTransfer.send_file(client_socket, '1', 'client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
 client_socket.closeSender()
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)
