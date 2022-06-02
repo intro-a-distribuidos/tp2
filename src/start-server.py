@@ -143,6 +143,8 @@ def client_handle(connSocket, addr):
         FileTransfer.request(connSocket,FileTransfer.OK,file_name,0)
     lockOpenFiles.release()
 
+
+
     if packet.type == FileTransfer.RECEIVE:
         logging.debug(
             "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
@@ -164,6 +166,10 @@ def client_handle(connSocket, addr):
             "Cliente:{} solicito una operacion INVALIDA".format(addr))
         connSocket.closeReceiver()
         return
+
+    lockOpenFiles.acquire()
+    openFiles.remove(file_name)
+    lockOpenFiles.release()
 
     logging.debug(
         "La trasferencia para el cliente {}, realizo con exito".format(addr))
