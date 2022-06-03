@@ -1,10 +1,17 @@
 import argparse
-from socket import socket, AF_INET, SOCK_STREAM
-from FileTransfer import FileTransfer, Packet
 import logging
-
+import time
 import sys
+
+from socket import socket, AF_INET, SOCK_STREAM
+
+from FileTransfer import FileTransfer, Packet
+from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
+from lib.RDTSocketSW import RDTSocketSW
+
+RDT_SR = 1
+RDT_SW = 2
 
 
 def getArgs():
@@ -17,7 +24,7 @@ def getArgs():
         '--host',
         type=str,
         metavar='',
-        default='',
+        default='127.0.0.1',
         help='server IP address')
     optionals.add_argument(
         '-p',
@@ -31,14 +38,14 @@ def getArgs():
         '--src',
         type=str,
         metavar='',
-        default='',
+        default='client_files/default',
         help='source file path')
     optionals.add_argument(
         '-n',
         '--name',
         type=str,
         metavar='',
-        default='file',
+        default='default',
         help='file name')
 
     group = optionals.add_mutually_exclusive_group()
@@ -47,8 +54,8 @@ def getArgs():
         '--verbose',
         action='store_const',
         dest='verboseLevel',
-        const=3,
-        default=2,
+        const=logging.DEBUG,
+        default=logging.INFO,
         metavar='',
         help='increase output verbosity')
     group.add_argument(
@@ -56,53 +63,100 @@ def getArgs():
         '--quiet',
         action='store_const',
         dest='verboseLevel',
-        const=1,
-        default=2,
+        const=logging.ERROR,
+        default=logging.INFO,
         metavar='',
         help='decrease output verbosity')
+
+    rdt = optionals.add_mutually_exclusive_group()
+    rdt.add_argument(
+        '-sr',
+        '--selective-repeat',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SR,
+        default=1,
+        metavar='',
+        help='use Selective Repeat as RDT protocol')
+    rdt.add_argument(
+        '-sw',
+        '--stop-and-wait',
+        action='store_const',
+        dest='rdtType',
+        const=RDT_SW,
+        default=1,
+        metavar='',
+        help='use Stop and Wait as RDT protocol')
 
     return parser.parse_args()
 
 
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
+logging.basicConfig(level=args.verboseLevel, filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p',
-                    stream=sys.stdout)
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
+try:
+    f = open(args.src, 'rb')
+except BaseException:
+    logging.debug("Cannot open the file \"{}\"".format(args.src))
+    exit(-1)
+try:
+    if args.rdtType == RDT_SR:
+        client_socket = RDTSocketSR()
+    else:
+        client_socket = RDTSocketSW()
 
-###############################################################
-#   Esto es un ejemplo de como funcionaria subir un archivo   #
-#   al directorio del servidor.                               #
-###############################################################
+    client_socket.connect((args.host, args.port))
 
+    # we want to upload a file
+    FileTransfer.request(client_socket, FileTransfer.SEND, args.name)
 
-# Me creo que socket que me intento conectar con el servidor
-client_socket = RDTSocketSR()
-client_socket.connect(('127.0.0.1', 12000))
+    # server responses if the query was accepted
+    responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
+    if responsePacket.type == FileTransfer.OK:
+        startTime = time.time_ns()
+        FileTransfer.send_file(client_socket, f)
 
-# Envio el primer mensaje de configuracion al servidor
-# Packet(
-#        type: 1 ---> Le estoy avisando que voy a enviarle un archivo
-#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
-#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
-#       )
-packet = Packet(
-    1,
-    0,
-    'Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg'.encode()).serialize()
-messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.sendSelectiveRepeat(messaje)
+        finishTime = time.time_ns()
 
-# Por ultimo llamo al FileTransfer y le pide que:
-# Envie el archivo src/test por cliente_socket
+        elapsedTime = (finishTime - startTime) / 1000000  # Convert ns to ms
+        logging.debug(
+            "Finished uploading the file in {:.0f}ms".format(elapsedTime))
 
-FileTransfer = FileTransfer()
-FileTransfer.send_file(
-    client_socket,
-    '1',
-    'client_files/Boullée_-_Cénotaphe_à_Newton_-_Coupe.jpg')
+    if responsePacket.type == FileTransfer.BUSY_FILE:
+        logging.info("The file you are trying to access is currently busy")
+        client_socket.closeReceiver()
+        f.close()
+        exit()
+    if responsePacket.type == FileTransfer.ERROR:
+        logging.info("The file you are trying to access cannot open")
+        client_socket.closeReceiver()
+        f.close()
+        exit()
+
+except ServerUnreachable:
+    logging.info("Server unreachable...")
+    f.close()
+    client_socket.closeReceiver()
+    exit()
+except LostConnection:
+    logging.info("Lost connection...")
+    f.close()
+    client_socket.closeReceiver()
+    exit()
+except Exception as e:
+    logging.info("An error [{}] has ocurred".format(e))
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
+except KeyboardInterrupt:
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
+
+f.close()
 client_socket.closeSender()
-# El '1' deberia ser ser tu addr en princio
-# solo la utilizo para debugging (TODO)
