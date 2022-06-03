@@ -2,7 +2,7 @@ import time
 import logging
 import random
 
-from .exceptions import TimeOutException
+from .exceptions import LostConnection, ServerUnreachable
 from threading import Lock, Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
 from .RDTPacket import RDTPacket, RDT_HEADER_LENGTH
@@ -10,8 +10,9 @@ from sys import getsizeof
 
 
 MSS = 1500
-
-
+NRETRIES = 17
+RECV_TIMEOUT = 0.5
+TIMEOUT = NRETRIES * RECV_TIMEOUT
 class RDTSocketSW:
     mainSocket = None
 
@@ -25,7 +26,7 @@ class RDTSocketSW:
     ackNum = 0
     socket = None  # Underlying UDP socket
     listening = False
-
+    listeningThread = None
     lockUnacceptedConnections = Lock()
     unacceptedConnections = {}          # Mapa de sockets en espera
 
@@ -66,10 +67,10 @@ class RDTSocketSW:
         self.destIP, self.destPort = destAddr
 
         logging.info("Envío client_isn num: {}".format(self.seqNum))
-        self.socket.settimeout(2)  # 2 second timeout
+        self.socket.settimeout(TIMEOUT)
         synAckPacket, addr = (None, None)
         receivedSYNACK = False
-        tries = 3
+        tries = NRETRIES
 
         while(not receivedSYNACK and tries > 0):
             try:
@@ -84,7 +85,7 @@ class RDTSocketSW:
                 logging.info("Lost SYNACK, {} tries left".format(tries))
         if(tries == 0):
             logging.info("Error establishing connection")
-            raise TimeOutException
+            raise ServerUnreachable
 
         self.ackNum = synAckPacket.seqNum
         # El cliente ahora apunta al socket especifico de la conexión en vez de
@@ -110,11 +111,11 @@ class RDTSocketSW:
     """
 
     def listen(self, maxQueuedConnections):
-        listeningThread = Thread(target=self.listenThread,
+        self.listeningThread = Thread(target=self.listenThread,
                                  args=(maxQueuedConnections,))
-        listeningThread.daemon = True  # Closes with the main thread
+        self.listeningThread.daemon = True  # Closes with the main thread
         self.listening = True
-        listeningThread.start()
+        self.listeningThread.start()
         logging.debug("Now server is listening...")
 
     def isNewClient(self, address):
@@ -196,7 +197,7 @@ class RDTSocketSW:
     def createConnection(self, clientAddress, initialAckNum):
         newConnection = RDTSocketSW()
         newConnection.bind(('', 0))
-        newConnection.socket.settimeout(2)  # 2 second timeout
+        newConnection.socket.settimeout(TIMEOUT)
         newConnection.setDestinationAddress(clientAddress)
         newConnection.ackNum = initialAckNum
         newConnection.mainSocket = self
@@ -265,7 +266,7 @@ class RDTSocketSW:
     def send(self, bytes):
         receivedAck = False
         bytesSent = 0
-        tries = 10  # Es temporal, la usamos para evitar ciclos infinitos
+        tries = NRETRIES
 
         logging.debug(
             "Start sending, destination [{}:{}]".format(
@@ -304,6 +305,8 @@ class RDTSocketSW:
                 logging.info("Timeout")
                 logging.info("Retrying...")
                 tries -= 1
+            if(tries == 0):
+                raise LostConnection
         return bytesSent
 
     def recv(self):
@@ -315,18 +318,54 @@ class RDTSocketSW:
 
             try:
                 receivedPacket = self._recv(MSS)
-            except BaseException:
-                return b''
+            except timeout:
+                raise LostConnection
 
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
             isCorrupt = receivedPacket.checksum != receivedPacket.calculateChecksum()
-            # TODO: verificar checksum
             if(receivedSuccessfully and not isCorrupt):
                 self.ackNum += len(receivedPacket.data)
             responsePacket = RDTPacket.makeACKPacket(self.ackNum)
             self._send(responsePacket)
-
         return receivedPacket.data
+
+    def sendFIN(self):
+        receivedAck = False
+        bytesSent = 0
+        tries = NRETRIES
+
+        logging.debug(
+            "Start sending, destination [{}:{}]".format(
+                self.destIP, self.destPort))
+        while(not receivedAck and tries > 0):
+            try:
+                logging.debug(
+                    "Sending SEQNO [{}], ACKNO [{}]".format(
+                        self.seqNum, self.ackNum))
+                finPacket = RDTPacket.makeFINPacket()
+                # logging.debug(bytes)
+                bytesSent = self.socket.sendto(
+                    finPacket.serialize(), (self.destIP, self.destPort))
+
+                try:
+                    recvPacket = self._recv(MSS)
+                except LostConnection:
+                    return 0
+
+                if(recvPacket.isACK() and (self.seqNum == recvPacket.ackNum)):
+                    logging.info("Sent successfully")
+                    receivedAck = True
+                else:
+                    logging.debug(
+                        "Unexpected message from {}:{}, excepted ACK".format(
+                            self.destIP, self.destPort))
+            except timeout:
+                logging.info("Timeout")
+                logging.info("Retrying...")
+                tries -= 1
+            if(tries == 0):
+                raise LostConnection
+        return bytesSent
 
     def closeConnectionSocket(self, destinationAddress):
 
@@ -346,3 +385,24 @@ class RDTSocketSW:
 
         self.listening = False
         self.socket.close()
+
+    def closeSender(self):
+        self.sendFIN()
+        if(self.mainSocket is not None):
+            self.mainSocket.closeConnectionSocket((self.destIP, self.destPort))
+        self.socket.close()
+        logging.info("Socket closed...")
+
+    def closeReceiver(self):
+        if(self.mainSocket is not None):
+            self.mainSocket.closeConnectionSocket((self.destIP, self.destPort))
+        self.socket.close()
+        logging.info("Socket closed...")
+
+    def closeServer(self):
+        if(self.listeningThread):
+            self.listeningThread.join()
+
+        for _, conn in self.unacceptedConnections.items():
+            conn.socket.close()
+            self.socket.close()

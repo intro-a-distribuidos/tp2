@@ -3,7 +3,7 @@ import logging
 import sys
 from time import sleep
 
-from lib.exceptions import LostConnetion
+from lib.exceptions import LostConnection
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s [%(levelname)s]: %(message)s',
@@ -46,7 +46,7 @@ try:
     client_socket.send(
         '#12. Francisco: Me parece que los oigo. Alto ahi. ¡Eh! ¿Quien va?'.encode())
 
-except LostConnetion:
+except LostConnection:
     logging.info("Could not reach the server, closing connection")
 
 client_socket.closeSender()

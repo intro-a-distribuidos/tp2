@@ -2,7 +2,7 @@ import time
 import logging
 import random
 
-from lib.exceptions import LostConnetion, TimeOutException, ServerUnreachable
+from lib.exceptions import LostConnection, TimeOutException, ServerUnreachable
 from threading import Lock, Thread, Timer
 from socket import socket, AF_INET, SOCK_DGRAM, SHUT_RD, timeout
 from lib.RDTPacket import RDTPacket, RDT_HEADER_LENGTH
@@ -675,7 +675,7 @@ class RDTSocketSR:
             logging.debug(
                 "Connection({}:{}), Assuming lost connection, cannot send anymore.".format(
                     self.destIP, self.destPort))
-            raise LostConnetion
+            raise LostConnection
 
         packetSent = RDTPacket(
             self.getSeqNum(),

@@ -2,7 +2,7 @@ class TimeOutException(Exception):
     pass
 
 
-class LostConnetion(Exception):
+class LostConnection(Exception):
     pass
 
 
