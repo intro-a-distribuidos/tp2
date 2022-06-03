@@ -38,6 +38,8 @@ class FileTransfer:
     BUSY_FILE = 4
     MSS = 1500
     CONFIG_LEN = 209
+    HEADER_PACKET = 4
+    PAYLOAD = MSS - RDT_HEADER_LENGTH - HEADER_PACKET
 
     #   This function receive packets and write payload in the file
     #   sent as argument.
@@ -54,18 +56,17 @@ class FileTransfer:
                     raise RuntimeError # TODO TODO TODO TODO TODO
                 file.write(packet.data)
         return
-
+ 
     @classmethod
     def send_file(self, connSocket, file):
-        # TODO quitar de acá el MSS
-        file_bytes = file.read(self.MSS)
+        file_bytes = file.read(self.PAYLOAD)
         while file_bytes != b'':
             packet = Packet(self.OK, file_bytes)
             bytes_sent = connSocket.send(packet.serialize())
 
             if bytes_sent == b'':
                 return
-            file_bytes = file.read(self.MSS)
+            file_bytes = file.read(self.PAYLOAD)
 
     #   Send a request for the socket
     @classmethod

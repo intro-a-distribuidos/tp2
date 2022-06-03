@@ -480,12 +480,14 @@ class RDTSocketSR:
         tuplePacketAck = self.findPacket(seqNum)
         if tuplePacketAck is not None:
             return tuplePacketAck[1]
-
-        if(not self.isOutPutWindowEmpty()):
-            self.lockOutPutWindow.acquire()
+        
+        self.lockOutPutWindow.acquire()
+        if(len(self.outPutWindow) != 0):
+            print(self.outPutWindow)
             ret = seqNum < self.outPutWindow[0][0].seqNum
             self.lockOutPutWindow.release()
             return ret
+        self.lockOutPutWindow.release()
         return seqNum < self.getSeqNum()
 
     def outPutWindowIsFull(self):
