@@ -1,14 +1,18 @@
 import argparse
-from socket import socket, AF_INET, SOCK_STREAM
-from FileTransfer import FileTransfer, Packet
 import logging
-from lib.exceptions import ServerUnreachable, LostConnection
 import time
 import sys
+
+from socket import socket, AF_INET, SOCK_STREAM
+
+from FileTransfer import FileTransfer, Packet
+from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
+
 RDT_SR = 1
 RDT_SW = 2
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -49,8 +53,8 @@ def getArgs():
         '--verbose',
         action='store_const',
         dest='verboseLevel',
-        const=3,
-        default=2,
+        const=logging.DEBUG,
+        default=logging.INFO,
         metavar='',
         help='increase output verbosity')
     group.add_argument(
@@ -58,8 +62,8 @@ def getArgs():
         '--quiet',
         action='store_const',
         dest='verboseLevel',
-        const=1,
-        default=2,
+        const=logging.ERROR,
+        default=logging.INFO,
         metavar='',
         help='decrease output verbosity')
 
@@ -88,10 +92,9 @@ def getArgs():
 
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
+logging.basicConfig(level=args.verboseLevel, filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p',
-                    stream=sys.stdout)
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
 try:
     f = open(args.src, 'rb')
 except:

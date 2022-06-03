@@ -211,8 +211,6 @@ class RDTSocketSR:
     """
 
     def listenThread(self, maxQueuedConnections):
-        # TODO?: si está llena acceptedConnections deberíamos quedarnos en un while
-        # esperando que se vacíe, no hacer otra cosa
         self.socket.settimeout(1)
         data, address = (None, None)
 
@@ -231,7 +229,7 @@ class RDTSocketSR:
                     logging.info(
                         "Refused connection from [{}:{}] due pending connections overflow".format(
                             *address))
-                    continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
+                    continue
 
                 newConnection = self.createConnection(address, packet.seqNum)
 
@@ -342,7 +340,6 @@ class RDTSocketSR:
         logging.debug("Waiting for new connections")
 
         while(self.unacceptedConnectionsIsEmpty()):
-            # TODO: HORRIBLE!!!!!!!!
             time.sleep(0.2)
 
         addr, connection = self.popUnacceptedConnection()
@@ -668,7 +665,6 @@ class RDTSocketSR:
                     self.destIP, self.destPort))
 
         while self.outPutWindowIsFull():
-            # TODO
             time.sleep(0.2)
 
         if(self.isLostConnection()):
@@ -786,7 +782,6 @@ class RDTSocketSR:
                 "Connection({}:{}), waiting to send correctly every packet".format(
                     self.destIP, self.destPort))
         while(not self.isOutPutWindowEmpty()):
-            # TODO idem 100pre
             time.sleep(0.2)
 
         if(not self.isLostConnection()):

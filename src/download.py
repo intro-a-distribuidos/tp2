@@ -1,12 +1,13 @@
 import argparse
-import pathlib
 from pathlib import Path
-from socket import AF_INET, SOCK_STREAM
-from FileTransfer import FileTransfer, Packet
+import pathlib
 import logging
 import sys
 import os
 
+from socket import AF_INET, SOCK_STREAM
+
+from FileTransfer import FileTransfer, Packet
 from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
@@ -54,8 +55,8 @@ def getArgs():
         '--verbose',
         action='store_const',
         dest='verboseLevel',
-        const=3,
-        default=2,
+        const=logging.DEBUG,
+        default=logging.INFO,
         metavar='',
         help='increase output verbosity')
     optionals.add_argument(
@@ -63,8 +64,8 @@ def getArgs():
         '--quiet',
         action='store_const',
         dest='verboseLevel',
-        const=1,
-        default=2,
+        const=logging.ERROR,
+        default=logging.INFO,
         metavar='',
         help='decrease output verbosity')
     
@@ -94,10 +95,10 @@ def getArgs():
 
 args = getArgs()
 
-logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
+logging.basicConfig(level=args.verboseLevel, filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p',
-                    stream=sys.stdout)
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
+
 try:
     try:
         path = Path(args.dst)

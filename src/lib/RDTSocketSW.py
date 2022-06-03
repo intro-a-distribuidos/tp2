@@ -147,8 +147,6 @@ class RDTSocketSW:
     """
 
     def listenThread(self, maxQueuedConnections):
-        # TODO?: si está llena acceptedConnections deberíamos quedarnos en un while
-        # esperando que se vacíe, no hacer otra cosa
         self.socket.settimeout(1)
         data, address = (None, None)
 
@@ -167,7 +165,7 @@ class RDTSocketSW:
                     logging.info(
                         "Refused connection from [{}:{}] due pending connections overflow".format(
                             *address))
-                    continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
+                    continue
 
                 newConnection = self.createConnection(address, packet.seqNum)
 
@@ -284,7 +282,6 @@ class RDTSocketSW:
                         self.seqNum, self.ackNum))
                 packetSent = RDTPacket(
                     self.seqNum, self.ackNum, None, False, False, False, bytes)
-                # logging.debug(bytes)
                 bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))
 
@@ -330,7 +327,7 @@ class RDTSocketSW:
 
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
             isCorrupt = receivedPacket.checksum != receivedPacket.calculateChecksum()
-            if(receivedSuccessfully and not isCorrupt): # and not isCorrupt
+            if(receivedSuccessfully and not isCorrupt):
                 self.ackNum += len(receivedPacket.data)
             responsePacket = RDTPacket.makeACKPacket(self.ackNum)
             self._send(responsePacket)
@@ -354,7 +351,7 @@ class RDTSocketSW:
                     "Sending SEQNO [{}], ACKNO [{}]".format(
                         self.seqNum, self.ackNum))
                 finPacket = RDTPacket.makeFINPacket()
-                # logging.debug(bytes)
+                
                 bytesSent = self.socket.sendto(
                     finPacket.serialize(), (self.destIP, self.destPort))
 

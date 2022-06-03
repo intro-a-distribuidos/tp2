@@ -47,8 +47,8 @@ def getArgs():
         '--verbose',
         action='store_const',
         dest='verboseLevel',
-        const=3,
-        default=2,
+        const=logging.DEBUG,
+        default=logging.INFO,
         metavar='',
         help='increase output verbosity')
     group.add_argument(
@@ -56,8 +56,8 @@ def getArgs():
         '--quiet',
         action='store_const',
         dest='verboseLevel',
-        const=1,
-        default=2,
+        const=logging.ERROR,
+        default=logging.INFO,
         metavar='',
         help='decrease output verbosity')
 
@@ -190,10 +190,9 @@ def client_handle(connSocket, addr):
     return
 
 
-logging.basicConfig(level=logging.DEBUG, # filename="server.log",
+logging.basicConfig(level=args.verboseLevel, filename="server.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
-                    datefmt='%Y/%m/%d %I:%M:%S %p',
-                    stream=sys.stdout)
+                    datefmt='%Y/%m/%d %I:%M:%S %p')
 
 serverSocket = None
 try:
