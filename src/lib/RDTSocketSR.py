@@ -480,14 +480,15 @@ class RDTSocketSR:
         tuplePacketAck = self.findPacket(seqNum)
         if tuplePacketAck is not None:
             return tuplePacketAck[1]
-
-        if(not self.isOutPutWindowEmpty()):
-            self.lockOutPutWindow.acquire()
+        
+        self.lockOutPutWindow.acquire()
+        if(len(self.outPutWindow) != 0):
+            print(self.outPutWindow)
             ret = seqNum < self.outPutWindow[0][0].seqNum
             self.lockOutPutWindow.release()
             return ret
-
-        return seqNum < self.getAckNum()
+        self.lockOutPutWindow.release()
+        return seqNum < self.getSeqNum()
 
     def outPutWindowIsFull(self):
         self.lockOutPutWindow.acquire()
@@ -696,12 +697,13 @@ class RDTSocketSR:
             "Connection({}:{}), Sending Packet(seqno={}, ackno={}, l={})".format(
                 self.destIP, self.destPort, packetSent.seqNum, packetSent.ackNum, len(
                     packetSent.data)))
-
+        
+        self.lockOutPutWindow.acquire()
         lenbytessent = self._send(packetSent)
         if(lenbytessent == 0):
+            self.lockOutPutWindow.release()
             return 0
 
-        self.lockOutPutWindow.acquire()
         self.outPutWindow.append((packetSent, False))
         self.lockOutPutWindow.release()
         timerThread = Timer(RESEND_TIME, self.resend, (packetSent.seqNum,))
@@ -832,6 +834,7 @@ class RDTSocketSR:
             "Connecion({}:{}), closing UDP-Socket".format(self.destIP, self.destPort))
         self.socket.close()
         logging.info("Socket closed...")
+        self.changeFlagClosed(True)
 
     def closeServer(self):
         logging.info("Closing server socket...")

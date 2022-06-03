@@ -111,7 +111,7 @@ try:
     client_socket.connect((args.host, args.port))
 
     # we want to download a file
-    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name, 0)
+    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name)
 
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
@@ -124,6 +124,9 @@ try:
         logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
     if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
+        client_socket.closeReceiver()
+    if responsePacket.type == FileTransfer.ERROR:
+        logging.info("The file you are trying to access cannot open")
         client_socket.closeReceiver()
 except ServerUnreachable:
     logging.info("Server unreachable...")

@@ -10,22 +10,20 @@ from lib.RDTSocketSR import RDTSocketSR, RDT_HEADER_LENGTH
 
 class Packet:
     type = 0
-    size = 0
-    name = ''
+    data = ''
 
-    def __init__(self, type, size, name="".encode()):
+    def __init__(self, type, data="".encode()):
         self.type = type
-        self.size = size
-        self.name = name
+        self.data = data
 
     def serialize(self):
-        return struct.pack("i i {}s".format(len(self.name)),
-                           self.type, self.size, self.name)
+        return struct.pack("i {}s".format(len(self.data)),
+                           self.type, self.data)
 
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack("i i", serializedPacket[:8])
-        packet = (*packet, serializedPacket[8:])
+        packet = struct.unpack("i ", serializedPacket[:4])
+        packet = (*packet, serializedPacket[4:])
         return cls(*packet)
 
 
@@ -39,16 +37,15 @@ class FileTransfer:
     OK = 3
     BUSY_FILE = 4
     MSS = 1500
-
-    PAYLOAD = MSS - RDT_HEADER_LENGTH
     CONFIG_LEN = 209
+    HEADER_PACKET = 4
+    PAYLOAD = MSS - RDT_HEADER_LENGTH - HEADER_PACKET
 
     #   This function receive packets and write payload in the file
     #   sent as argument.
     @classmethod
     def recv_file(self, connSocket, file):
         bytes = b'a'
-
         while bytes != b'':
             bytes = connSocket.recv()
 
@@ -57,25 +54,23 @@ class FileTransfer:
                 if (packet.type == self.ERROR):
                     # TODO cambiar este nombre poco descriptivo...
                     raise RuntimeError # TODO TODO TODO TODO TODO
-                file.write(packet.name)  # TODO: Chequear si es escribe bien.
+                file.write(packet.data)
         return
-
+ 
     @classmethod
     def send_file(self, connSocket, file):
-        # TODO quitar de acá el MSS
         file_bytes = file.read(self.PAYLOAD)
         while file_bytes != b'':
-            packet = Packet(self.OK, 0, file_bytes)
+            packet = Packet(self.OK, file_bytes)
             bytes_sent = connSocket.send(packet.serialize())
 
             if bytes_sent == b'':
                 return
             file_bytes = file.read(self.PAYLOAD)
 
-    # Función auxiliar que arma un packet (request) y se lo manda al
-    # servidor
+    #   Send a request for the socket
     @classmethod
-    def request(cls, socket, type, file_name, file_size):
-        packet = Packet(type, file_size, file_name.encode()).serialize()
+    def request(cls, socket, type, data):
+        packet = Packet(type, data.encode()).serialize()
         socket.send(packet)
         return
