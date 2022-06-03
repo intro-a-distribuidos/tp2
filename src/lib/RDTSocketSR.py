@@ -72,9 +72,7 @@ class RDTSocketSR:
         self.closed = False
 
     def getSeqNum(self):
-        self.lockSequenceNumber.acquire()
         v = self.seqNum
-        self.lockSequenceNumber.release()
         return v
     def addToSeqNum(self, n):
         self.lockSequenceNumber.acquire()
@@ -82,9 +80,7 @@ class RDTSocketSR:
         self.lockSequenceNumber.release()
 
     def getAckNum(self):
-        self.lockAcknowledgmentNumber.acquire()
         v = self.ackNum
-        self.lockAcknowledgmentNumber.release()
         return v
     def setAckNum(self, newAckNum):
         self.lockAcknowledgmentNumber.acquire()
@@ -483,7 +479,6 @@ class RDTSocketSR:
         
         self.lockOutPutWindow.acquire()
         if(len(self.outPutWindow) != 0):
-            print(self.outPutWindow)
             ret = seqNum < self.outPutWindow[0][0].seqNum
             self.lockOutPutWindow.release()
             return ret
@@ -652,7 +647,6 @@ class RDTSocketSR:
     """
 
     def _send(self, packet):
-        # TODO lockear al booleano
         if(not self.wasRequestedClose()):
             lenbytessent = self.socket.sendto(packet.serialize(), (self.destIP, self.destPort))
             return lenbytessent
