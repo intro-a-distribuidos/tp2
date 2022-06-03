@@ -12,7 +12,7 @@ from sys import getsizeof
 MSS = 1500
 WINDOWSIZE = 10
 INPUT_BUFFER_SIZE = 44  # UDP buffer size = 65535, 44 MSS
-NRETRIES = 17 # see doc
+NRETRIES = 18 # see doc
 RESEND_TIME = 0.5
 RECEIVE_TIMEOUT = NRETRIES*RESEND_TIME
 
