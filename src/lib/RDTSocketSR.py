@@ -616,15 +616,20 @@ class RDTSocketSR:
             time.sleep(0.1)
 
         expectedPacket = self.getExpectedInput()
+
         if(expectedPacket):
-            logging.debug(
-                "Connection({}:{}), packet {} received successfully".format(
-                    self.destIP, self.destPort, self.getAckNum()))
-            self.lockInputBuffer.acquire()
-            del self.inputBuffer[self.getAckNum()]
-            self.lockInputBuffer.release()
-            self.addToAckNum(len(expectedPacket.data))
-            return expectedPacket.data
+            isCorrupt = expectedPacket.checksum != expectedPacket.calculateChecksum()
+            if(not isCorrupt):
+                logging.debug(
+                    "Connection({}:{}), packet {} received successfully".format(
+                        self.destIP, self.destPort, self.getAckNum()))
+                #logging.debug("Received packet checksum: {}".format(expectedPacket.checksum))
+                #logging.debug("Calculated packet checksum: {}".format(expectedPacket.calculateChecksum()))
+                self.lockInputBuffer.acquire()
+                del self.inputBuffer[self.getAckNum()]
+                self.lockInputBuffer.release()
+                self.addToAckNum(len(expectedPacket.data))
+                return expectedPacket.data
 
         if(self.wasRequestedClose()):
             logging.debug(
@@ -675,10 +680,13 @@ class RDTSocketSR:
         packetSent = RDTPacket(
             self.getSeqNum(),
             self.getAckNum(),
+            None,
             False,
             False,
             False,
             bytes)
+        
+        logging.debug("Sent Packet checksum: {}".format(packetSent.checksum))
         logging.debug(
             "Connection({}:{}), Sending Packet(seqno={}, ackno={}, l={})".format(
                 self.destIP, self.destPort, packetSent.seqNum, packetSent.ackNum, len(

@@ -276,7 +276,7 @@ class RDTSocketSW:
                     "Sending SEQNO [{}], ACKNO [{}]".format(
                         self.seqNum, self.ackNum))
                 packetSent = RDTPacket(
-                    self.seqNum, self.ackNum, False, False, False, bytes)
+                    self.seqNum, self.ackNum, None, False, False, False, bytes)
                 # logging.debug(bytes)
                 bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))
@@ -319,8 +319,9 @@ class RDTSocketSW:
                 return b''
 
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
+            isCorrupt = receivedPacket.checksum != receivedPacket.calculateChecksum()
             # TODO: verificar checksum
-            if(receivedSuccessfully):
+            if(receivedSuccessfully and not isCorrupt):
                 self.ackNum += len(receivedPacket.data)
             responsePacket = RDTPacket.makeACKPacket(self.ackNum)
             self._send(responsePacket)
