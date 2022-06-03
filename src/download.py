@@ -125,6 +125,9 @@ try:
     if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
         client_socket.closeReceiver()
+    if responsePacket.type == FileTransfer.ERROR:
+        logging.info("The file you are trying to access doesn't exists")
+        client_socket.closeReceiver()
 except ServerUnreachable:
     logging.info("Server unreachable...")
 except LostConnection:
