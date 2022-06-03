@@ -11,31 +11,29 @@ from sys import getsizeof
 
 MSS = 1500
 NRETRIES = 17
-RECV_TIMEOUT = 0.5
+RECV_TIMEOUT = 1
 
 class RDTSocketSW:
-    mainSocket = None
-
-    # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
-    srcIP = ''  # Default source addr
-    srcPort = 0  # Default source port
-    destIP = None
-    destPort = None
-
-    seqNum = 0
-    ackNum = 0
-    socket = None  # Underlying UDP socket
-    listening = False
-    listeningThread = None
-    lockUnacceptedConnections = Lock()
-    unacceptedConnections = {}          # Mapa de sockets en espera
-
-    lockAcceptedConnections = Lock()
-    acceptedConnections = {}            # Mapa de sockets aceptados
-
     def __init__(self):
-        self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.mainSocket = None
+        self.socket = socket(AF_INET, SOCK_DGRAM) #Underlying UDP socket
         self.seqNum = random.randint(0, 1000)
+        self.ackNum = 0
+
+        # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
+        self.srcIP = ''  # Default source addr
+        self.srcPort = 0  # Default source port
+        self.destIP = None
+        self.destPort = None
+
+        
+        self.listening = False
+        self.listeningThread = None
+        self.lockUnacceptedConnections = Lock()
+        self.unacceptedConnections = {}          # Mapa de sockets en espera
+
+        self.lockAcceptedConnections = Lock()
+        self.acceptedConnections = {}            # Mapa de sockets aceptados
         logging.info("Initial sequence number: {}".format(self.seqNum))
 
     def getsockname(self):
