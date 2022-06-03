@@ -1,10 +1,12 @@
 import argparse
 import pathlib
+from pathlib import Path
 from socket import AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
 import sys
 import os
+
 from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
@@ -98,6 +100,8 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     stream=sys.stdout)
 try:
     try:
+        path = Path(args.dst)
+        path.parent.mkdir(exist_ok=True, parents=True)
         file = open(args.dst, 'wb')
     except:
         logging.debug("Cannot open the file \"{}\"".format(args.dst))

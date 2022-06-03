@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 import os
+from pathlib import Path
 import time
 
 from FileTransfer import FileTransfer, Packet
@@ -138,7 +139,10 @@ def client_handle(connSocket, addr):
         connSocket.closeReceiver()
         return
     try:
+        path = Path(args.storage + '/' + file_name)
+        path.parent.mkdir(exist_ok=True, parents=True)
         file = open(args.storage + '/' + file_name, 'rb' if packet.type == FileTransfer.RECEIVE else 'wb')
+        
     except:
         logging.debug("Client({}:{}) Cannot open the file \"{}\"".format(addr[0], addr[1], args.storage + '/' + file_name))
         FileTransfer.request(connSocket,FileTransfer.ERROR, file_name)
