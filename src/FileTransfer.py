@@ -43,15 +43,10 @@ class FileTransfer:
     PAYLOAD = MSS - RDT_HEADER_LENGTH
     CONFIG_LEN = 209
 
-    #   Esta funcion lee los paquetes que llegan por el socket y
-    #   los escriben en el file enviado por parametro. Si el file
-    #   existe lo sobreescribe.
-
+    #   This function receive packets and write payload in the file
+    #   sent as argument.
     @classmethod
-    def recv_file(self, connSocket, addr, file_name):
-        output_file = Path(file_name)
-        output_file.parent.mkdir(exist_ok=True, parents=True)
-        f = open(file_name, "wb")
+    def recv_file(self, connSocket, file):
         bytes = b'a'
 
         while bytes != b'':
@@ -61,61 +56,26 @@ class FileTransfer:
                 packet = Packet.fromSerializedPacket(bytes)
                 if (packet.type == self.ERROR):
                     # TODO cambiar este nombre poco descriptivo...
-                    raise RuntimeError
-            f.write(bytes)  # TODO: Chequear si es escribe bien.
-
-        f.close()
-        logging.debug("{} termino de recibir los archivos".format(addr))
+                    raise RuntimeError # TODO TODO TODO TODO TODO
+                file.write(packet.name)  # TODO: Chequear si es escribe bien.
         return
 
     @classmethod
-    def send_ofile(self, connSocket, addr, f):
+    def send_file(self, connSocket, file):
         # TODO quitar de acá el MSS
-        file_bytes = f.read(self.MSS)
+        file_bytes = file.read(self.MSS)
         while file_bytes != b'':
-
-            bytes_sent = connSocket.send(file_bytes)
+            packet = Packet(self.OK, 0, file_bytes)
+            bytes_sent = connSocket.send(packet.serialize())
 
             if bytes_sent == b'':
-                logging.info(
-                    "Socket({}:{}) closed before the transfer was completed".format(*addr))
                 return
-            file_bytes = f.read(self.MSS)
-        logging.info(
-                    "Socket({}:{}) transfer completed successfully".format(*addr))
+            file_bytes = file.read(self.MSS)
 
-
-    # Esta funcion lee de un file y envia de a MSS bytes por el socket
-    @classmethod
-    def send_file(self, connSocket, addr, file_name):
-        try:
-            f = open(file_name, 'rb')
-        except:
-            logging.debug("Cannot open the file \"{}\"".format(file_name))
-            packet = Packet(self.ERROR, 0, file_name.encode()).serialize()
-            connSocket.send(packet)
-            return
-
-        self.send_ofile(connSocket, addr, f)
-        f.close()
-        return
-
-        # Función auxiliar que arma un packet (request) y se lo manda al
-        # servidor
+    # Función auxiliar que arma un packet (request) y se lo manda al
+    # servidor
     @classmethod
     def request(cls, socket, type, file_name, file_size):
         packet = Packet(type, file_size, file_name.encode()).serialize()
         socket.send(packet)
-        return
-
-    # Un socket cliente que ya haya hecho el connect a un servidor llama a
-    # esta función para avisarle que quiere hacer un upload
-    def request_upload(self, clientSocket, file_name, file_size):
-        self.request(clientSocket, self.SEND, file_name, file_size)
-        return
-
-    # Un socket cliente que ya haya hecho el connect a un servidor llama a
-    # esta función para avisarle que quiere hacer un download
-    def request_download(self, clientSocket, file_name):
-        self.request(clientSocket, self.RECEIVE, file_name)
         return

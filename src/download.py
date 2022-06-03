@@ -35,13 +35,15 @@ def getArgs():
     optionals.add_argument(
         '-d',
         '--dst',
-        type=pathlib.Path,
+        type=str,
+        default='client_files/default',
         metavar='',
         help='destination file path')
     optionals.add_argument(
         '-n',
         '--name',
         type=str,
+        default='default',
         metavar='',
         help='file name')
 
@@ -74,7 +76,7 @@ def getArgs():
         const=RDT_SR,
         default=1,
         metavar='',
-        help='use Selective Repeat how RDT method')
+        help='use Selective Repeat as RDT protocol')
     rdt.add_argument(
         '-sw',
         '--stop-and-wait',
@@ -83,7 +85,7 @@ def getArgs():
         const=RDT_SW,
         default=1,
         metavar='',
-        help='use Stop and Wait how RDT method')
+        help='use Stop and Wait as RDT protocol')
 
     return parser.parse_args()
 
@@ -95,6 +97,12 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
 try:
+    try:
+        file = open(args.dst, 'wb')
+    except:
+        logging.debug("Cannot open the file \"{}\"".format(args.dst))
+        exit()
+
     if args.rdtType == RDT_SR:
         client_socket = RDTSocketSR()
     else:
@@ -103,29 +111,35 @@ try:
     client_socket.connect((args.host, args.port))
 
     # we want to download a file
-    queryPacket = Packet(FileTransfer.RECEIVE, 0, args.name.encode()).serialize()
-    client_socket.send(queryPacket)
+    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name, 0)
 
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
     if responsePacket.type == FileTransfer.OK:
         startTime = time.time_ns()
-        FileTransfer.recv_file(client_socket, (1,1), args.dst)
+        FileTransfer.recv_file(client_socket, file)
         finishTime = time.time_ns()
 
         elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
         logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
     if responsePacket.type == FileTransfer.BUSY_FILE:
-        logging.info(" The file you are trying to access is currently busy")
+        logging.info("The file you are trying to access is currently busy")
         client_socket.closeReceiver()
 except ServerUnreachable:
     logging.info("Server unreachable...")
 except LostConnection:
     os.remove(args.dst)
     logging.info("Lost connection, removing invalid file")
-except:
+except Exception as e:
+    logging.info("An error [{}] has ocurred. Removing invalid file".format(e))
+    if(os.path.isfile(args.dst)):
+        os.remove(args.dst)
+    logging.info("Good bye...")
+except KeyboardInterrupt: # system exit, keyboard interrupt
     logging.info("Removing invalid file")
     if(os.path.isfile(args.dst)):
         os.remove(args.dst)
     logging.info("Good bye...")
+
+file.close()
 client_socket.closeReceiver()

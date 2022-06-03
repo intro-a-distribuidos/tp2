@@ -33,14 +33,14 @@ def getArgs():
         '--src',
         type=str,
         metavar='',
-        default='file',
+        default='client_files/default',
         help='source file path')
     optionals.add_argument(
         '-n',
         '--name',
         type=str,
         metavar='',
-        default='file',
+        default='default',
         help='file name')
 
     group = optionals.add_mutually_exclusive_group()
@@ -72,7 +72,7 @@ def getArgs():
         const=RDT_SR,
         default=1,
         metavar='',
-        help='use Selective Repeat how RDT method')
+        help='use Selective Repeat as RDT protocol')
     rdt.add_argument(
         '-sw',
         '--stop-and-wait',
@@ -81,7 +81,7 @@ def getArgs():
         const=RDT_SW,
         default=1,
         metavar='',
-        help='use Stop and Wait how RDT method')
+        help='use Stop and Wait as RDT protocol')
 
     return parser.parse_args()
 
@@ -106,15 +106,14 @@ try:
     client_socket.connect((args.host, args.port))
 
     # we want to upload a file
-    queryPacket = Packet(FileTransfer.SEND, 0, args.name.encode()).serialize()
-    client_socket.send(queryPacket)
+    FileTransfer.request(client_socket, FileTransfer.SEND, args.name, 0)
 
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
     if responsePacket.type == FileTransfer.OK:
         startTime = time.time_ns()
-        FileTransfer.send_ofile(client_socket, (1,1), f)
+        FileTransfer.send_file(client_socket, f)
 
         finishTime = time.time_ns()
 
@@ -127,16 +126,22 @@ try:
         client_socket.closeReceiver()
         exit()
 except ServerUnreachable:
+    logging.info("Server unreachable...")
     f.close()
     client_socket.closeReceiver()
-    logging.info("Server unreachable...")
     exit()
 except LostConnection:
+    logging.info("Lost connection...")
     f.close()
     client_socket.closeReceiver()
-    logging.info("Lost connection...")
     exit()
-except:
+except Exception as e:
+    logging.info("An error [{}] has ocurred".format(e))
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
+except KeyboardInterrupt:
     f.close()
     client_socket.closeReceiver()
     logging.info("Good bye...")
