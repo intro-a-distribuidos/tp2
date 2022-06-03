@@ -11,7 +11,8 @@ from sys import getsizeof
 
 MSS = 1500
 NRETRIES = 17
-RECV_TIMEOUT = 1
+RESEND_TIME = 0.5
+RECEIVE_TIMEOUT = NRETRIES * RESEND_TIME
 
 class RDTSocketSW:
     def __init__(self):
@@ -65,7 +66,7 @@ class RDTSocketSW:
         self.destIP, self.destPort = destAddr
 
         logging.info("Envío client_isn num: {}".format(self.seqNum))
-        self.socket.settimeout(RECV_TIMEOUT)
+        self.socket.settimeout(RECEIVE_TIMEOUT)
         synAckPacket, addr = (None, None)
         receivedSYNACK = False
         tries = NRETRIES
@@ -202,7 +203,7 @@ class RDTSocketSW:
     def createConnection(self, clientAddress, initialAckNum):
         newConnection = RDTSocketSW()
         newConnection.bind(('', 0))
-        newConnection.socket.settimeout(RECV_TIMEOUT)
+        newConnection.socket.settimeout(RECEIVE_TIMEOUT)
         newConnection.setDestinationAddress(clientAddress)
         newConnection.ackNum = initialAckNum
         newConnection.mainSocket = self
@@ -287,10 +288,7 @@ class RDTSocketSW:
                 bytesSent = self.socket.sendto(
                     packetSent.serialize(), (self.destIP, self.destPort))
 
-                try:
-                    recvPacket = self._recv(MSS)
-                except BaseException:
-                    return 0
+                recvPacket = self._recv(MSS)
 
                 if(recvPacket.isACK() and ((self.seqNum + len(bytes)) == recvPacket.ackNum)):
                     logging.info("Sent successfully")
@@ -318,13 +316,17 @@ class RDTSocketSW:
         logging.info("Receiving...")
         receivedSuccessfully = False
         receivedPacket = None
+        tries = NRETRIES
+        logging.debug("Waiting for packet [{}]".format(self.ackNum))
         while(not receivedSuccessfully):
-            logging.debug("Waiting for packet [{}]".format(self.ackNum))
-
             try:
                 receivedPacket = self._recv(MSS)
             except timeout:
-                raise LostConnection
+                tries -= 1
+                if(tries < 0):
+                    raise LostConnection
+                else:
+                    continue
 
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
             isCorrupt = receivedPacket.checksum != receivedPacket.calculateChecksum()
