@@ -6,7 +6,6 @@ import struct
 import os
 from pathlib import Path
 
-from lib.exceptions import NameNotFoundException
 from lib.RDTSocketSR import RDTSocketSR, RDTHEADER
 
 
@@ -62,39 +61,44 @@ class FileTransfer:
             if (bytes != b''):
                 packet = Packet.fromSerializedPacket(bytes)
                 if (packet.type == self.ERROR):
-                    raise NameNotFoundException
+                    # TODO cambiar este nombre poco descriptivo...
+                    raise RuntimeError
             f.write(bytes)  # TODO: Chequear si es escribe bien.
 
         f.close()
         logging.debug("{} termino de recibir los archivos".format(addr))
         return
 
-    #   Esta funcion lee de un file y envia de a MSS bytes por el socket
     @classmethod
-    def send_file(self, connSocket, addr, file_name):
-
-        try:
-            f = open(file_name, 'rb')
-        except BaseException:
-            logging.debug("No existe el file {}".format(file_name))
-            # TODO: Enviar un paquete con el typo 2(error)
-            packet = Packet(self.ERROR, 0, file_name.encode()).serialize()
-            connSocket.send(packet)
-            return
-
+    def send_ofile(self, connSocket, addr, f):
+        # TODO quitar de acá el MSS
         file_bytes = f.read(self.MSS)
         while file_bytes != b'':
 
             bytes_sent = connSocket.send(file_bytes)
 
             if bytes_sent == b'':
-                f.close()
-                logging.debug(
-                    "Se cerró elb socket antes de terminar el enviar, Socket ID:{}".format(connSocket))
+                logging.info(
+                    "Socket({}:{}) closed before the transfer was completed".format(*addr))
                 return
             file_bytes = f.read(self.MSS)
+        logging.info(
+                    "Socket({}:{}) transfer completed successfully".format(*addr))
+
+
+    # Esta funcion lee de un file y envia de a MSS bytes por el socket
+    @classmethod
+    def send_file(self, connSocket, addr, file_name):
+        try:
+            f = open(file_name, 'rb')
+        except:
+            logging.debug("Cannot open the file \"{}\"".format(file_name))
+            packet = Packet(self.ERROR, 0, file_name.encode()).serialize()
+            connSocket.send(packet)
+            return
+
+        self.send_ofile(connSocket, addr, f)
         f.close()
-        logging.debug("{} termino de enviar los archivos".format(addr))
         return
 
         # Función auxiliar que arma un packet (request) y se lo manda al

@@ -2,7 +2,7 @@ import argparse
 from socket import socket, AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
-
+from lib.exceptions import ServerUnreachable, LostConnection
 import sys
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
@@ -91,39 +91,48 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
+try:
+    f = open(args.src, 'rb')
+except:
+    logging.debug("Cannot open the file \"{}\"".format(args.src))
+    exit(-1)
+try:
+    if args.rdtType == RDT_SR:
+        client_socket = RDTSocketSR()
+    else:
+        client_socket = RDTSocketSW()
 
-###############################################################
-#   Esto es un ejemplo de como funcionaria subir un archivo   #
-#   al directorio del servidor.                               #
-###############################################################
+    client_socket.connect((args.host, args.port))
 
+    # we want to upload a file
+    queryPacket = Packet(FileTransfer.SEND, 0, args.name.encode()).serialize()
+    client_socket.send(queryPacket)
 
-# Me creo que socket que me intento conectar con el servidor
-if  args.rdtType == RDT_SR:
-    client_socket = RDTSocketSR()
-else:
-    client_socket = RDTSocketSW()
-client_socket.connect((args.host, args.port))
+    # server responses if the query was accepted
+    responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
-
-# Envio el primer mensaje de configuracion al servidor
-# Packet(
-#        type: 1 ---> Le estoy avisando que voy a enviarle un archivo
-#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
-#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
-#       )
-queryPacket = Packet(1, 0, args.name.encode()).serialize()
-client_socket.send(queryPacket)
-
-responsePacket = Packet.fromSerializedPacket(client_socket.recv())
-
-if responsePacket.type == FileTransfer.BUSY_FILE:
-    logging.info(" The file you are trying to access is currently busy")
+    if responsePacket.type == FileTransfer.OK:
+        FileTransfer.send_ofile(client_socket, (1,1), f)
+    else: # responsePacket.type == FileTransfer.BUSY_FILE:
+        logging.info("The file you are trying to access is currently busy")
+        f.close()
+        client_socket.closeReceiver()
+        exit()
+except ServerUnreachable:
+    f.close()
     client_socket.closeReceiver()
-# Por ultimo llamo al FileTransfer y le pide que:
-# Envie el archivo src/test por cliente_socket
+    logging.info("Server unreachable...")
+    exit()
+except LostConnection:
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Lost connection...")
+    exit()
+except:
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
 
-FileTransfer.send_file(client_socket, '1', args.src)
+f.close()
 client_socket.closeSender()
-# El '1' deberia ser ser tu addr en princio
-# solo la utilizo para debugging (TODO)

@@ -2,7 +2,7 @@ import time
 import logging
 import random
 
-from .exceptions import TimeOutException
+from .exceptions import LostConnection
 from threading import Lock, Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
 from .RDTPacket import RDTPacket
@@ -85,7 +85,7 @@ class RDTSocketSW:
                 logging.info("Lost SYNACK, {} tries left".format(tries))
         if(tries == 0):
             logging.info("Error establishing connection")
-            raise TimeOutException
+            raise LostConnection
 
         self.ackNum = synAckPacket.seqNum
         # El cliente ahora apunta al socket especifico de la conexión en vez de

@@ -7,6 +7,7 @@ from FileTransfer import FileTransfer, Packet
 from threading import Thread, Lock
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
+from lib.exceptions import LostConnection
 
 RDT_SR = 1
 RDT_SW = 2
@@ -135,20 +136,18 @@ def client_handle(connSocket, addr):
         lockOpenFiles.release()
         connSocket.closeReceiver()
         return
-
     else:
         openFiles.append(file_name)
         FileTransfer.request(connSocket,FileTransfer.OK,file_name,0)
     lockOpenFiles.release()
 
 
-
     if packet.type == FileTransfer.RECEIVE:
         logging.debug(
-            "Cliente:{}  quiere recibir(RECEIVE) un archivo".format(addr))
+            "Cliente:{} quiere recibir(RECEIVE) un archivo".format(addr))
         # Si el cliente quiere recibir un archivo -> Servidor debe enviar
         connections.append((connSocket,FileTransfer.SEND))
-        FileTransfer.send_file(connSocket, addr, args.storage + '/' + file_name) 
+        FileTransfer.send_file(connSocket, addr, args.storage + '/' + file_name)
         connSocket.closeSender()
 
     elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
@@ -156,7 +155,11 @@ def client_handle(connSocket, addr):
             "Cliente:{}  quiere enviar(SEND) un archivo".format(addr))
         # Si el cliente quiere enviar un archivo -> Servidor debe recibir
         connections.append((connSocket,FileTransfer.RECEIVE))
-        FileTransfer.recv_file(connSocket, addr, args.storage + '/' + file_name) 
+        try:
+            FileTransfer.recv_file(connSocket, addr, args.storage + '/' + file_name)
+        except LostConnection:
+            logging.info("Lost connection with client, removing incompleted file")
+            os.remove(args.storage + '/' + file_name)
         connSocket.closeReceiver()
 
     else:
@@ -193,7 +196,7 @@ except KeyboardInterrupt:
     for conn,type in connections:
         try:
             if type == FileTransfer.SEND:
-                conn.closeSender()
+                conn.closeReceiver()
             else:
                 conn.closeReceiver()
         except KeyboardInterrupt:

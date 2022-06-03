@@ -1,12 +1,4 @@
-class TimeOutException(Exception):
-    pass
-
-
-class LostConnetion(Exception):
-    pass
-
-
-class NameNotFoundException(Exception):
+class LostConnection(Exception):
     pass
 
 

@@ -3,8 +3,9 @@ import pathlib
 from socket import AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
-from lib.exceptions import NameNotFoundException
 import sys
+import os
+from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
 from pyrsistent import optional
@@ -93,42 +94,34 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
-
-###############################################################
-#   Esto es un ejemplo de como funcionaria bajar un archivo   #
-#   del directorio del servidor.                              #
-###############################################################
-
-
-# Me creo que socket que me intento conectar con el servidor
-if  args.rdtType == RDT_SR:
-    client_socket = RDTSocketSR()
-else:
-    client_socket = RDTSocketSW()
-client_socket.connect((args.host, args.port))
-
-
-# Envio el primer mensaje de configuracion al servidor
-# Packet(
-#        type: 0 ---> Le estoy pidiendo un archivo
-#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
-#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
-#       )
-packet = Packet(0, 0, args.name.encode()).serialize()
-messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.send(messaje)
-
-packet = Packet.fromSerializedPacket(client_socket.recv())
-
-if packet.type == FileTransfer.BUSY_FILE:
-    logging.info(" The file you are trying to access is currently busy")
-    client_socket.closeReceiver()
-# Por ultimo llamo al FileTransfer y le pide que:
-# Envie el archivo src/test por cliente_socket
 try:
-    FileTransfer.recv_file(client_socket, '1', args.dst)
-except NameNotFoundException:
-    logging.debug("El archivo solicitado no existe")
+    if args.rdtType == RDT_SR:
+        client_socket = RDTSocketSR()
+    else:
+        client_socket = RDTSocketSW()
+
+    client_socket.connect((args.host, args.port))
+
+    # we want to download a file
+    queryPacket = Packet(FileTransfer.RECEIVE, 0, args.name.encode()).serialize()
+    client_socket.send(queryPacket)
+
+    # server responses if the query was accepted
+    responsePacket = Packet.fromSerializedPacket(client_socket.recv())
+    if responsePacket.type == FileTransfer.OK:
+        FileTransfer.recv_file(client_socket, (1,1), args.dst)
+
+    if responsePacket.type == FileTransfer.BUSY_FILE:
+        logging.info(" The file you are trying to access is currently busy")
+        client_socket.closeReceiver()
+except ServerUnreachable:
+    logging.info("Server unreachable...")
+except LostConnection:
+    os.remove(args.dst)
+    logging.info("Lost connection, removing invalid file")
+except:
+    logging.info("Removing invalid file")
+    if(os.path.isfile(args.dst)):
+        os.remove(args.dst)
+    logging.info("Good bye...")
 client_socket.closeReceiver()
-# El '1' deberia ser ser tu addr en princio
-# solo la utilizo para debugging (TODO)
