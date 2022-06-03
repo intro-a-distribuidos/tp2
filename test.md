@@ -1,6 +1,13 @@
 ### Test 1: Subir archivo
 
 ```sh
+# Archivo pequeño:
+$1 python3 src/start-server.py
+$2 
+
+# Archivo grande:
+
+# Imagen:
 
 ```
 

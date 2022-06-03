@@ -2,6 +2,7 @@ import argparse
 from socket import socket, AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
+from lib.exceptions import ServerUnreachable, LostConnection
 import time
 import sys
 from lib.RDTSocketSR import RDTSocketSR
@@ -32,14 +33,14 @@ def getArgs():
         '--src',
         type=str,
         metavar='',
-        default='file',
+        default='client_files/default',
         help='source file path')
     optionals.add_argument(
         '-n',
         '--name',
         type=str,
         metavar='',
-        default='file',
+        default='default',
         help='file name')
 
     group = optionals.add_mutually_exclusive_group()
@@ -71,7 +72,7 @@ def getArgs():
         const=RDT_SR,
         default=1,
         metavar='',
-        help='use Selective Repeat how RDT method')
+        help='use Selective Repeat as RDT protocol')
     rdt.add_argument(
         '-sw',
         '--stop-and-wait',
@@ -80,7 +81,7 @@ def getArgs():
         const=RDT_SW,
         default=1,
         metavar='',
-        help='use Stop and Wait how RDT method')
+        help='use Stop and Wait as RDT protocol')
 
     return parser.parse_args()
 
@@ -91,46 +92,60 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
+try:
+    f = open(args.src, 'rb')
+except:
+    logging.debug("Cannot open the file \"{}\"".format(args.src))
+    exit(-1)
+try:
+    if args.rdtType == RDT_SR:
+        client_socket = RDTSocketSR()
+    else:
+        client_socket = RDTSocketSW()
 
-###############################################################
-#   Esto es un ejemplo de como funcionaria subir un archivo   #
-#   al directorio del servidor.                               #
-###############################################################
+    client_socket.connect((args.host, args.port))
 
+    # we want to upload a file
+    FileTransfer.request(client_socket, FileTransfer.SEND, args.name, 0)
 
-# Me creo que socket que me intento conectar con el servidor
-if  args.rdtType == RDT_SR:
-    client_socket = RDTSocketSR()
-else:
-    client_socket = RDTSocketSW()
-client_socket.connect((args.host, args.port))
+    # server responses if the query was accepted
+    responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
+    if responsePacket.type == FileTransfer.OK:
+        startTime = time.time_ns()
+        FileTransfer.send_file(client_socket, f)
 
-# Envio el primer mensaje de configuracion al servidor
-# Packet(
-#        type: 1 ---> Le estoy avisando que voy a enviarle un archivo
-#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
-#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
-#       )
-queryPacket = Packet(1, 0, args.name.encode()).serialize()
-client_socket.send(queryPacket)
+        finishTime = time.time_ns()
 
-responsePacket = Packet.fromSerializedPacket(client_socket.recv())
+        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
 
-if responsePacket.type == FileTransfer.BUSY_FILE:
-    logging.info(" The file you are trying to access is currently busy")
+    else: # responsePacket.type == FileTransfer.BUSY_FILE:
+        logging.info("The file you are trying to access is currently busy")
+        f.close()
+        client_socket.closeReceiver()
+        exit()
+except ServerUnreachable:
+    logging.info("Server unreachable...")
+    f.close()
     client_socket.closeReceiver()
-# Por ultimo llamo al FileTransfer y le pide que:
-# Envie el archivo src/test por cliente_socket
+    exit()
+except LostConnection:
+    logging.info("Lost connection...")
+    f.close()
+    client_socket.closeReceiver()
+    exit()
+except Exception as e:
+    logging.info("An error [{}] has ocurred".format(e))
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
+except KeyboardInterrupt:
+    f.close()
+    client_socket.closeReceiver()
+    logging.info("Good bye...")
+    exit()
 
-startTime = time.time_ns()
-FileTransfer.send_file(client_socket, '1', args.src)
-finishTime = time.time_ns()
-
-elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
-logging.debug("Finished uploading the file in {:.0f}ms".format(elapsedTime))
-
+f.close()
 client_socket.closeSender()
-
-# El '1' deberia ser ser tu addr en princio
-# solo la utilizo para debugging (TODO)

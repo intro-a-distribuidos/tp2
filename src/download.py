@@ -3,8 +3,9 @@ import pathlib
 from socket import AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
-from lib.exceptions import NameNotFoundException
 import sys
+import os
+from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
 import time
@@ -34,13 +35,15 @@ def getArgs():
     optionals.add_argument(
         '-d',
         '--dst',
-        type=pathlib.Path,
+        type=str,
+        default='client_files/default',
         metavar='',
         help='destination file path')
     optionals.add_argument(
         '-n',
         '--name',
         type=str,
+        default='default',
         metavar='',
         help='file name')
 
@@ -73,7 +76,7 @@ def getArgs():
         const=RDT_SR,
         default=1,
         metavar='',
-        help='use Selective Repeat how RDT method')
+        help='use Selective Repeat as RDT protocol')
     rdt.add_argument(
         '-sw',
         '--stop-and-wait',
@@ -82,7 +85,7 @@ def getArgs():
         const=RDT_SW,
         default=1,
         metavar='',
-        help='use Stop and Wait how RDT method')
+        help='use Stop and Wait as RDT protocol')
 
     return parser.parse_args()
 
@@ -93,47 +96,50 @@ logging.basicConfig(level=logging.DEBUG,  # filename="client.log",
                     format='%(asctime)s [%(levelname)s]: %(message)s',
                     datefmt='%Y/%m/%d %I:%M:%S %p',
                     stream=sys.stdout)
-
-###############################################################
-#   Esto es un ejemplo de como funcionaria bajar un archivo   #
-#   del directorio del servidor.                              #
-###############################################################
-
-
-# Me creo que socket que me intento conectar con el servidor
-if  args.rdtType == RDT_SR:
-    client_socket = RDTSocketSR()
-else:
-    client_socket = RDTSocketSW()
-client_socket.connect((args.host, args.port))
-
-
-# Envio el primer mensaje de configuracion al servidor
-# Packet(
-#        type: 0 ---> Le estoy pidiendo un archivo
-#        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
-#        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
-#       )
-packet = Packet(0, 0, args.name.encode()).serialize()
-messaje = packet  # + bytearray(1500 - len(packet)) #padding
-client_socket.send(messaje)
-
-packet = Packet.fromSerializedPacket(client_socket.recv())
-
-if packet.type == FileTransfer.BUSY_FILE:
-    logging.info("The file you are trying to access is currently busy")
-    client_socket.closeReceiver()
-# Por ultimo llamo al FileTransfer y le pide que:
-# Envie el archivo src/test por cliente_socket
 try:
-    startTime = time.time_ns()
-    FileTransfer.recv_file(client_socket, '1', args.dst)
-    finishTime = time.time_ns()
+    try:
+        file = open(args.dst, 'wb')
+    except:
+        logging.debug("Cannot open the file \"{}\"".format(args.dst))
+        exit()
 
-    elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
-    logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
-except NameNotFoundException:
-    logging.debug("El archivo solicitado no existe")
+    if args.rdtType == RDT_SR:
+        client_socket = RDTSocketSR()
+    else:
+        client_socket = RDTSocketSW()
+
+    client_socket.connect((args.host, args.port))
+
+    # we want to download a file
+    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name, 0)
+
+    # server responses if the query was accepted
+    responsePacket = Packet.fromSerializedPacket(client_socket.recv())
+    if responsePacket.type == FileTransfer.OK:
+        startTime = time.time_ns()
+        FileTransfer.recv_file(client_socket, file)
+        finishTime = time.time_ns()
+
+        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
+    if responsePacket.type == FileTransfer.BUSY_FILE:
+        logging.info("The file you are trying to access is currently busy")
+        client_socket.closeReceiver()
+except ServerUnreachable:
+    logging.info("Server unreachable...")
+except LostConnection:
+    os.remove(args.dst)
+    logging.info("Lost connection, removing invalid file")
+except Exception as e:
+    logging.info("An error [{}] has ocurred. Removing invalid file".format(e))
+    if(os.path.isfile(args.dst)):
+        os.remove(args.dst)
+    logging.info("Good bye...")
+except KeyboardInterrupt: # system exit, keyboard interrupt
+    logging.info("Removing invalid file")
+    if(os.path.isfile(args.dst)):
+        os.remove(args.dst)
+    logging.info("Good bye...")
+
+file.close()
 client_socket.closeReceiver()
-# El '1' deberia ser ser tu addr en princio
-# solo la utilizo para debugging (TODO)

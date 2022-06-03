@@ -2,7 +2,7 @@ import time
 import logging
 import random
 
-from lib.exceptions import LostConnection, TimeOutException, ServerUnreachable
+from lib.exceptions import LostConnection, ServerUnreachable
 from threading import Lock, Thread, Timer
 from socket import socket, AF_INET, SOCK_DGRAM, SHUT_RD, timeout
 from lib.RDTPacket import RDTPacket, RDT_HEADER_LENGTH
@@ -10,11 +10,11 @@ from sys import getsizeof
 
 
 MSS = 1500
-WINDOWSIZE = 2
-INPUT_BUFFER_SIZE = 4  # UDP buffer size = 65535, 44 MSS
+WINDOWSIZE = 10
+INPUT_BUFFER_SIZE = 44  # UDP buffer size = 65535, 44 MSS
+NRETRIES = 17 # see doc
 RESEND_TIME = 0.5
-NRETRIES = 20  # see doc
-
+RECEIVE_TIMEOUT = NRETRIES*RESEND_TIME
 
 class RDTSocketSR:
     ##############################
@@ -612,7 +612,12 @@ class RDTSocketSR:
             logging.debug(
                 "Connection({}:{}), packet {} not received yet, waiting... ".format(
                     self.destIP, self.destPort, self.getAckNum()))
+        startTime = time.time()
         while(not self.getExpectedInput() and not self.wasRequestedClose()):
+            waitingTime = time.time() - startTime
+            if(waitingTime > RECEIVE_TIMEOUT):
+                self.changeFlagLostConnection(True)
+                raise LostConnection
             time.sleep(0.1)
 
         expectedPacket = self.getExpectedInput()
@@ -805,7 +810,8 @@ class RDTSocketSR:
         logging.debug(
             "Connecion({}:{}) ending receiving-thread".format(self.destIP, self.destPort))
         self.changeFlagRequestedClose(True)
-        self.receivingThread.join()
+        if(self.receivingThread is not None):
+            self.receivingThread.join()
         logging.debug(
             "Connecion({}:{}), closing UDP-Socket".format(self.destIP, self.destPort))
         self.socket.close()
@@ -819,7 +825,8 @@ class RDTSocketSR:
         logging.debug(
             "Connecion({}:{}) ending receiving-thread".format(self.destIP, self.destPort))
         self.changeFlagRequestedClose(True)
-        self.receivingThread.join()
+        if(self.receivingThread is not None):
+            self.receivingThread.join()
 
         logging.debug(
             "Connecion({}:{}), closing UDP-Socket".format(self.destIP, self.destPort))
@@ -833,14 +840,16 @@ class RDTSocketSR:
         # Join listen thread
         logging.debug(
             "Server socket, ending listening-thread".format(self.destIP, self.destPort))
-        self.listeningThread.join()
+        if(self.listeningThread is not None):
+            self.listeningThread.join()
         # Close unaccepted sockets running
         logging.debug(
             "Server socket, closing all unaccepted connections".format(
                 self.destIP, self.destPort))
         for _, conn in self.unacceptedConnections.items():
             conn.requestedClose = True
-            conn.receivingThread.join()
+            if(conn.receivingThread is not None):
+                conn.receivingThread.join()
             conn.socket.close()
 
         logging.debug(
