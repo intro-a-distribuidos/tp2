@@ -12,9 +12,10 @@ from sys import getsizeof
 MSS = 1500
 WINDOWSIZE = 10
 INPUT_BUFFER_SIZE = 44  # UDP buffer size = 65535, 44 MSS
-NRETRIES = 18 # see doc
+NRETRIES = 18  # see doc
 RESEND_TIME = 0.5
-RECEIVE_TIMEOUT = NRETRIES*RESEND_TIME
+RECEIVE_TIMEOUT = NRETRIES * RESEND_TIME
+
 
 class RDTSocketSR:
     ##############################
@@ -58,7 +59,8 @@ class RDTSocketSR:
         self.receivingThread = None
 
         self.lockInputBuffer = Lock()
-        self.inputBuffer = {}                    # Map where will be store the incoming packets
+        # Map where will be store the incoming packets
+        self.inputBuffer = {}
         self.lockOutPutWindow = Lock()
         self.outPutWindow = []                   # Window of packets sent
 
@@ -74,6 +76,7 @@ class RDTSocketSR:
     def getSeqNum(self):
         v = self.seqNum
         return v
+
     def addToSeqNum(self, n):
         self.lockSequenceNumber.acquire()
         self.seqNum += n
@@ -82,20 +85,23 @@ class RDTSocketSR:
     def getAckNum(self):
         v = self.ackNum
         return v
+
     def setAckNum(self, newAckNum):
         self.lockAcknowledgmentNumber.acquire()
         self.ackNum = newAckNum
         self.lockAcknowledgmentNumber.release()
+
     def addToAckNum(self, n):
         self.lockAcknowledgmentNumber.acquire()
         self.ackNum += n
-        self.lockAcknowledgmentNumber.release()        
+        self.lockAcknowledgmentNumber.release()
 
     def isListening(self):
         self.lockListening.acquire()
         v = self.listening
         self.lockListening.release()
         return v
+
     def changeFlagListening(self, newListeningValue):
         self.lockListening.acquire()
         self.listening = newListeningValue
@@ -106,6 +112,7 @@ class RDTSocketSR:
         v = self.lostConnection
         self.lockLostConnection.release()
         return v
+
     def changeFlagLostConnection(self, newLostConnectionValue):
         self.lockLostConnection.acquire()
         self.lostConnection = newLostConnectionValue
@@ -116,6 +123,7 @@ class RDTSocketSR:
         v = self.receivedFINACK
         self.lockReceivedFINACK.release()
         return v
+
     def changeFlagReceivedFINACK(self, newReceivedFINACKValue):
         self.lockReceivedFINACK.acquire()
         self.receivedFINACK = newReceivedFINACKValue
@@ -126,6 +134,7 @@ class RDTSocketSR:
         v = self.requestedClose
         self.lockRequestedClose.release()
         return v
+
     def changeFlagRequestedClose(self, newRequestedCloseValue):
         self.lockRequestedClose.acquire()
         self.requestedClose = newRequestedCloseValue
@@ -136,6 +145,7 @@ class RDTSocketSR:
         v = self.closed
         self.lockClosed.release()
         return v
+
     def changeFlagClosed(self, newClosedValue):
         self.lockClosed.acquire()
         self.closed = newClosedValue
@@ -473,7 +483,7 @@ class RDTSocketSR:
         tuplePacketAck = self.findPacket(seqNum)
         if tuplePacketAck is not None:
             return tuplePacketAck[1]
-        
+
         self.lockOutPutWindow.acquire()
         if(len(self.outPutWindow) != 0):
             ret = seqNum < self.outPutWindow[0][0].seqNum
@@ -645,7 +655,8 @@ class RDTSocketSR:
 
     def _send(self, packet):
         if(not self.wasRequestedClose()):
-            lenbytessent = self.socket.sendto(packet.serialize(), (self.destIP, self.destPort))
+            lenbytessent = self.socket.sendto(
+                packet.serialize(), (self.destIP, self.destPort))
             return lenbytessent
 
     """
@@ -681,13 +692,13 @@ class RDTSocketSR:
             False,
             False,
             bytes)
-        
+
         logging.debug("Sent Packet checksum: {}".format(packetSent.checksum))
         logging.debug(
             "Connection({}:{}), Sending Packet(seqno={}, ackno={}, l={})".format(
                 self.destIP, self.destPort, packetSent.seqNum, packetSent.ackNum, len(
                     packetSent.data)))
-        
+
         self.lockOutPutWindow.acquire()
         lenbytessent = self._send(packetSent)
         if(lenbytessent == 0):
@@ -755,7 +766,8 @@ class RDTSocketSR:
     def sendFIN(self):
         tries = NRETRIES
         while(tries > 0 and not self.hasReceivedFINACK()):
-            packetFIN = RDTPacket.makeFINPacket(self.getSeqNum(), self.getAckNum())
+            packetFIN = RDTPacket.makeFINPacket(
+                self.getSeqNum(), self.getAckNum())
             logging.debug(
                 "Connection({}:{}), sending FIN Packet(seqno={}, ackno={}, l={}), tries left={}".format(
                     self.destIP, self.destPort, packetFIN.seqNum, packetFIN.ackNum, len(

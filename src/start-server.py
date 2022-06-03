@@ -14,6 +14,7 @@ from lib.exceptions import LostConnection
 RDT_SR = 1
 RDT_SW = 2
 
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -98,7 +99,7 @@ def start_server(serverSocket):
         os.makedirs(args.storage)
     except FileExistsError:
         pass
-    except:
+    except BaseException:
         raise
 
     while True:
@@ -130,34 +131,37 @@ def client_handle(connSocket, addr):
             'download' if packet.type == 0 else 'upload',
             file_name))
 
-
     lockOpenFiles.acquire()
     if file_name in openFiles:
-        logging.info("Client({}:{}) want to use a busy file, sending error".format(*addr))
-        FileTransfer.request(connSocket,FileTransfer.BUSY_FILE,file_name)
+        logging.info(
+            "Client({}:{}) want to use a busy file, sending error".format(
+                *addr))
+        FileTransfer.request(connSocket, FileTransfer.BUSY_FILE, file_name)
         lockOpenFiles.release()
         connSocket.closeReceiver()
         return
     try:
         path = Path(args.storage + '/' + file_name)
         path.parent.mkdir(exist_ok=True, parents=True)
-        file = open(args.storage + '/' + file_name, 'rb' if packet.type == FileTransfer.RECEIVE else 'wb')
-        
-    except:
-        logging.debug("Client({}:{}) Cannot open the file \"{}\"".format(addr[0], addr[1], args.storage + '/' + file_name))
-        FileTransfer.request(connSocket,FileTransfer.ERROR, file_name)
+        file = open(args.storage + '/' + file_name,
+                    'rb' if packet.type == FileTransfer.RECEIVE else 'wb')
+
+    except BaseException:
+        logging.debug("Client({}:{}) Cannot open the file \"{}\"".format(
+            addr[0], addr[1], args.storage + '/' + file_name))
+        FileTransfer.request(connSocket, FileTransfer.ERROR, file_name)
         lockOpenFiles.release()
         connSocket.closeReceiver()
         return
 
     openFiles.append(file_name)
     logging.info("Client({}:{}) beginning transaction".format(*addr))
-    FileTransfer.request(connSocket,FileTransfer.OK,file_name)
+    FileTransfer.request(connSocket, FileTransfer.OK, file_name)
     lockOpenFiles.release()
 
     if packet.type == FileTransfer.RECEIVE:
         # If the client want to receive a file, then the server send packets
-        connections.append((connSocket,FileTransfer.SEND))
+        connections.append((connSocket, FileTransfer.SEND))
         try:
             FileTransfer.send_file(connSocket, file)
             connSocket.closeSender()
@@ -168,12 +172,13 @@ def client_handle(connSocket, addr):
 
     elif packet.type == FileTransfer.SEND:
         # If the client want to send a file, then the server receive packets
-        connections.append((connSocket,FileTransfer.RECEIVE))
+        connections.append((connSocket, FileTransfer.RECEIVE))
         try:
             FileTransfer.recv_file(connSocket, file)
             logging.info("Client({}:{}) upload completed".format(*addr))
         except LostConnection:
-            logging.info("Client({}:{}) Lost connection, removing incompleted file")
+            logging.info(
+                "Client({}:{}) Lost connection, removing incompleted file")
             os.remove(args.storage + '/' + file_name)
         connSocket.closeReceiver()
 
@@ -196,25 +201,25 @@ logging.basicConfig(level=args.verboseLevel, filename="server.log",
 
 serverSocket = None
 try:
-    if  args.rdtType == RDT_SR:
+    if args.rdtType == RDT_SR:
         serverSocket = RDTSocketSR()
     else:
         serverSocket = RDTSocketSW()
     logging.info("Server: Welcome!!!")
     start_server(serverSocket)
-except BaseException: # KeyboardInterrupt, SystemExit...
+except BaseException:  # KeyboardInterrupt, SystemExit...
     print("")
     logging.info("Server: Goodbye!!!")
-    for conn,type in connections:
+    for conn, type in connections:
         try:
             if type == FileTransfer.SEND:
                 conn.closeReceiver()
             else:
                 conn.closeReceiver()
-        except BaseException: # KeyboardInterrupt, SystemExit...
+        except BaseException:  # KeyboardInterrupt, SystemExit...
             print("")
             exit()
     serverSocket.closeServer()
-except:
+except BaseException:
     serverSocket.closeServer()
     exit()

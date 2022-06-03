@@ -8,6 +8,7 @@ from pathlib import Path
 
 from lib.RDTSocketSR import RDTSocketSR, RDT_HEADER_LENGTH
 
+
 class Packet:
     type = 0
     data = ''
@@ -53,10 +54,10 @@ class FileTransfer:
                 packet = Packet.fromSerializedPacket(bytes)
                 if (packet.type == self.ERROR):
                     # TODO cambiar este nombre poco descriptivo...
-                    raise RuntimeError # TODO TODO TODO TODO TODO
+                    raise RuntimeError  # TODO TODO TODO TODO TODO
                 file.write(packet.data)
         return
- 
+
     @classmethod
     def send_file(self, connSocket, file):
         file_bytes = file.read(self.PAYLOAD)

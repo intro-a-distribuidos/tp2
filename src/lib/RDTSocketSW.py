@@ -14,10 +14,11 @@ NRETRIES = 18
 RESEND_TIME = 0.5
 RECEIVE_TIMEOUT = NRETRIES * RESEND_TIME
 
+
 class RDTSocketSW:
     def __init__(self):
         self.mainSocket = None
-        self.socket = socket(AF_INET, SOCK_DGRAM) #Underlying UDP socket
+        self.socket = socket(AF_INET, SOCK_DGRAM)  # Underlying UDP socket
         self.seqNum = random.randint(0, 1000)
         self.ackNum = 0
 
@@ -27,7 +28,6 @@ class RDTSocketSW:
         self.destIP = None
         self.destPort = None
 
-        
         self.listening = False
         self.listeningThread = None
         self.lockUnacceptedConnections = Lock()
@@ -111,7 +111,7 @@ class RDTSocketSW:
 
     def listen(self, maxQueuedConnections):
         self.listeningThread = Thread(target=self.listenThread,
-                                 args=(maxQueuedConnections,))
+                                      args=(maxQueuedConnections,))
         self.listeningThread.daemon = True  # Closes with the main thread
         self.listening = True
         self.listeningThread.start()
@@ -351,7 +351,7 @@ class RDTSocketSW:
                     "Sending SEQNO [{}], ACKNO [{}]".format(
                         self.seqNum, self.ackNum))
                 finPacket = RDTPacket.makeFINPacket()
-                
+
                 bytesSent = self.socket.sendto(
                     finPacket.serialize(), (self.destIP, self.destPort))
 

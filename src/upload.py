@@ -13,6 +13,7 @@ from lib.RDTSocketSW import RDTSocketSW
 RDT_SR = 1
 RDT_SW = 2
 
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -97,7 +98,7 @@ logging.basicConfig(level=args.verboseLevel, filename="client.log",
                     datefmt='%Y/%m/%d %I:%M:%S %p')
 try:
     f = open(args.src, 'rb')
-except:
+except BaseException:
     logging.debug("Cannot open the file \"{}\"".format(args.src))
     exit(-1)
 try:
@@ -120,8 +121,9 @@ try:
 
         finishTime = time.time_ns()
 
-        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
-        logging.debug("Finished uploading the file in {:.0f}ms".format(elapsedTime))
+        elapsedTime = (finishTime - startTime) / 1000000  # Convert ns to ms
+        logging.debug(
+            "Finished uploading the file in {:.0f}ms".format(elapsedTime))
 
     if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")

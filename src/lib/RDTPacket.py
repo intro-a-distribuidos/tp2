@@ -17,7 +17,15 @@ class RDTPacket:
     #checksum = None
     data = "".encode()
 
-    def __init__(self, seqNum, ackNum, checksum, syn, ack, fin, data="".encode()):
+    def __init__(
+            self,
+            seqNum,
+            ackNum,
+            checksum,
+            syn,
+            ack,
+            fin,
+            data="".encode()):
         self.seqNum = seqNum
         self.ackNum = ackNum
         self.syn = syn
@@ -32,7 +40,8 @@ class RDTPacket:
     # https://stackoverflow.com/questions/3753589/packing-and-unpacking-variable-length-array-string-using-the-struct-module-in-py
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack("i i i ? ? ?", serializedPacket[:RDT_HEADER_LENGTH])
+        packet = struct.unpack("i i i ? ? ?",
+                               serializedPacket[:RDT_HEADER_LENGTH])
         packet = (*packet, serializedPacket[RDT_HEADER_LENGTH:])
         return cls(*packet)
 
@@ -64,8 +73,14 @@ class RDTPacket:
         return cls(seqNum, ackNum, None, False, True, True)
 
     def serialize(self):
-        return struct.pack("i i i ? ? ? {}s".format(len(
-            self.data)), self.seqNum, self.ackNum, self.checksum, self.syn, self.ack, self.fin, self.data)
+        return struct.pack("i i i ? ? ? {}s".format(len(self.data)),
+                           self.seqNum,
+                           self.ackNum,
+                           self.checksum,
+                           self.syn,
+                           self.ack,
+                           self.fin,
+                           self.data)
 
     def carryAroundAdd(self, a, b):
         c = a + b
@@ -77,14 +92,19 @@ class RDTPacket:
             self.data)), self.seqNum, self.ackNum, self.syn, self.ack, self.fin, self.data)
 
         if(len(serializedFields) % 2 != 0):  # Agrego 1 byte de padding si el numero de bytes es impar
-            serializedFields += struct.pack("B", 0) 
+            serializedFields += struct.pack("B", 0)
 
         if(len(serializedFields) % 2 == 0):  # Divido en numeros de 16 bits
-            serializedFields = struct.unpack("%dH" % math.floor(len(serializedFields)/2), serializedFields)
+            serializedFields = struct.unpack(
+                "%dH" %
+                math.floor(
+                    len(serializedFields) /
+                    2),
+                serializedFields)
 
         for i in range(0, len(serializedFields)):
             # Si los ultimos 16 bytes tenian padding de 1 byte, shifteo
-            if(i == len(serializedFields)-1 and serializedFields[i] < 0x100):
+            if(i == len(serializedFields) - 1 and serializedFields[i] < 0x100):
                 serializedFields[i] << 8
             w = checksum + serializedFields[i]
             checksum = self.carryAroundAdd(checksum, w)

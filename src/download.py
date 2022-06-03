@@ -16,6 +16,7 @@ import time
 RDT_SR = 1
 RDT_SW = 2
 
+
 def getArgs():
     parser = argparse.ArgumentParser()
     parser._action_groups.pop()
@@ -68,7 +69,6 @@ def getArgs():
         default=logging.INFO,
         metavar='',
         help='decrease output verbosity')
-    
 
     rdt = optionals.add_mutually_exclusive_group()
     rdt.add_argument(
@@ -104,7 +104,7 @@ try:
         path = Path(args.dst)
         path.parent.mkdir(exist_ok=True, parents=True)
         file = open(args.dst, 'wb')
-    except:
+    except BaseException:
         logging.debug("Cannot open the file \"{}\"".format(args.dst))
         exit()
 
@@ -125,8 +125,9 @@ try:
         FileTransfer.recv_file(client_socket, file)
         finishTime = time.time_ns()
 
-        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
-        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
+        elapsedTime = (finishTime - startTime) / 1000000  # Convert ns to ms
+        logging.debug(
+            "Finished downloading the file in {:.0f}ms".format(elapsedTime))
     if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
         client_socket.closeReceiver()
@@ -149,7 +150,7 @@ except Exception as e:
     if(os.path.isfile(args.dst)):
         os.remove(args.dst)
     logging.info("Good bye...")
-except KeyboardInterrupt: # system exit, keyboard interrupt
+except KeyboardInterrupt:  # system exit, keyboard interrupt
     logging.info("Removing invalid file")
     if(os.path.isfile(args.dst)):
         os.remove(args.dst)
