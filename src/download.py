@@ -7,7 +7,7 @@ from lib.exceptions import NameNotFoundException
 import sys
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
-from pyrsistent import optional
+import time
 
 RDT_SR = 1
 RDT_SW = 2
@@ -121,12 +121,17 @@ client_socket.send(messaje)
 packet = Packet.fromSerializedPacket(client_socket.recv())
 
 if packet.type == FileTransfer.BUSY_FILE:
-    logging.info(" The file you are trying to access is currently busy")
+    logging.info("The file you are trying to access is currently busy")
     client_socket.closeReceiver()
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 try:
+    startTime = time.time_ns()
     FileTransfer.recv_file(client_socket, '1', args.dst)
+    finishTime = time.time_ns()
+
+    elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+    logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
 except NameNotFoundException:
     logging.debug("El archivo solicitado no existe")
 client_socket.closeReceiver()

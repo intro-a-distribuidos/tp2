@@ -2,7 +2,7 @@ import argparse
 from socket import socket, AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
-
+import time
 import sys
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
@@ -123,7 +123,14 @@ if responsePacket.type == FileTransfer.BUSY_FILE:
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 
+startTime = time.time_ns()
 FileTransfer.send_file(client_socket, '1', args.src)
+finishTime = time.time_ns()
+
+elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
+
 client_socket.closeSender()
+
 # El '1' deberia ser ser tu addr en princio
 # solo la utilizo para debugging (TODO)

@@ -5,7 +5,7 @@ import random
 from lib.exceptions import LostConnetion, TimeOutException, ServerUnreachable
 from threading import Lock, Thread, Timer
 from socket import socket, AF_INET, SOCK_DGRAM, SHUT_RD, timeout
-from lib.RDTPacket import RDTPacket
+from lib.RDTPacket import RDTPacket, RDT_HEADER_LENGTH
 from sys import getsizeof
 
 
@@ -13,7 +13,6 @@ MSS = 1500
 WINDOWSIZE = 2
 INPUT_BUFFER_SIZE = 4  # UDP buffer size = 65535, 44 MSS
 RESEND_TIME = 0.5
-RDTHEADER = 11
 NRETRIES = 20  # see doc
 
 
@@ -509,7 +508,7 @@ class RDTSocketSR:
         receivedSuccessfully = False
         data, addr = (None, None)
         while(not receivedSuccessfully):
-            data, addr = self.socket.recvfrom(bufsize + RDTHEADER)
+            data, addr = self.socket.recvfrom(bufsize + RDT_HEADER_LENGTH)
             receivedSuccessfully = self.matchDestAddr(addr)
         return RDTPacket.fromSerializedPacket(data)
 

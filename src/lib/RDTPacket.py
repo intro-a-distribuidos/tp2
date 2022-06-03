@@ -1,6 +1,6 @@
 import struct
 
-HEADER_LENGTH = 11
+RDT_HEADER_LENGTH = 11
 
 
 class RDTPacket:
@@ -27,8 +27,8 @@ class RDTPacket:
     # https://stackoverflow.com/questions/3753589/packing-and-unpacking-variable-length-array-string-using-the-struct-module-in-py
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack("i i ? ? ?", serializedPacket[:HEADER_LENGTH])
-        packet = (*packet, serializedPacket[HEADER_LENGTH:])
+        packet = struct.unpack("i i ? ? ?", serializedPacket[:RDT_HEADER_LENGTH])
+        packet = (*packet, serializedPacket[RDT_HEADER_LENGTH:])
         return cls(*packet)
 
     @classmethod

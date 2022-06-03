@@ -5,7 +5,7 @@ import random
 from .exceptions import TimeOutException
 from threading import Lock, Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
-from .RDTPacket import RDTPacket
+from .RDTPacket import RDTPacket, RDT_HEADER_LENGTH
 from sys import getsizeof
 
 
@@ -13,7 +13,6 @@ MSS = 1500
 
 
 class RDTSocketSW:
-    RDTHEADER = 10
     mainSocket = None
 
     # https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
@@ -250,7 +249,7 @@ class RDTSocketSW:
         receivedSuccessfully = False
         data, addr = (None, None)
         while(not receivedSuccessfully):
-            data, addr = self.socket.recvfrom(bufsize + self.RDTHEADER)
+            data, addr = self.socket.recvfrom(bufsize + RDT_HEADER_LENGTH)
             receivedSuccessfully = self.matchDestAddr(addr)
         return RDTPacket.fromSerializedPacket(data)
 
