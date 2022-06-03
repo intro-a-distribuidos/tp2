@@ -2,7 +2,6 @@ import time
 import logging
 import random
 
-from sqlalchemy import null
 from .exceptions import TimeOutException
 from threading import Lock, Thread
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout

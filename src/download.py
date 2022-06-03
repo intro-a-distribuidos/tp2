@@ -22,11 +22,13 @@ def getArgs():
         '--host',
         type=str,
         metavar='',
+        default='127.0.0.1',
         help='server IP address')
     optionals.add_argument(
         '-p',
         '--port',
         type=int,
+        default=5050,
         metavar='',
         help='server port')
     optionals.add_argument(
@@ -103,8 +105,7 @@ if  args.rdtType == RDT_SR:
     client_socket = RDTSocketSR()
 else:
     client_socket = RDTSocketSW()
-
-client_socket.connect(('127.0.0.1', 12000))
+client_socket.connect((args.host, args.port))
 
 
 # Envio el primer mensaje de configuracion al servidor
@@ -113,7 +114,7 @@ client_socket.connect(('127.0.0.1', 12000))
 #        size: 0 ---> Deberia enviarle el tamanio del archivo (TODO)
 #        name: Pruebas ---> El nombre que tiene que tener la copia del archivo
 #       )
-packet = Packet(0, 0, 'HisLorem.txt'.encode()).serialize()
+packet = Packet(0, 0, args.name.encode()).serialize()
 messaje = packet  # + bytearray(1500 - len(packet)) #padding
 client_socket.send(messaje)
 
@@ -125,7 +126,7 @@ if packet.type == FileTransfer.BUSY_FILE:
 # Por ultimo llamo al FileTransfer y le pide que:
 # Envie el archivo src/test por cliente_socket
 try:
-    FileTransfer.recv_file(client_socket, '1', 'client_files/MyLorem.txt')
+    FileTransfer.recv_file(client_socket, '1', args.dst)
 except NameNotFoundException:
     logging.debug("El archivo solicitado no existe")
 client_socket.closeReceiver()
