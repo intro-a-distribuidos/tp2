@@ -120,11 +120,17 @@ try:
         elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
         logging.debug("Finished uploading the file in {:.0f}ms".format(elapsedTime))
 
-    else: # responsePacket.type == FileTransfer.BUSY_FILE:
+    if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
-        f.close()
         client_socket.closeReceiver()
+        f.close()
         exit()
+    if responsePacket.type == FileTransfer.ERROR:
+        logging.info("The file you are trying to access cannot open")
+        client_socket.closeReceiver()
+        f.close()
+        exit()
+
 except ServerUnreachable:
     logging.info("Server unreachable...")
     f.close()
