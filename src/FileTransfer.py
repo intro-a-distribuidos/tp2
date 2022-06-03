@@ -63,14 +63,14 @@ class FileTransfer:
     @classmethod
     def send_file(self, connSocket, file):
         # TODO quitar de acá el MSS
-        file_bytes = file.read(self.MSS)
+        file_bytes = file.read(self.PAYLOAD)
         while file_bytes != b'':
             packet = Packet(self.OK, 0, file_bytes)
             bytes_sent = connSocket.send(packet.serialize())
 
             if bytes_sent == b'':
                 return
-            file_bytes = file.read(self.MSS)
+            file_bytes = file.read(self.PAYLOAD)
 
     # Función auxiliar que arma un packet (request) y se lo manda al
     # servidor

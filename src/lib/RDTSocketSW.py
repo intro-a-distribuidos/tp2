@@ -12,7 +12,7 @@ from sys import getsizeof
 MSS = 1500
 NRETRIES = 17
 RECV_TIMEOUT = 0.5
-TIMEOUT = NRETRIES * RECV_TIMEOUT
+
 class RDTSocketSW:
     mainSocket = None
 
@@ -67,7 +67,7 @@ class RDTSocketSW:
         self.destIP, self.destPort = destAddr
 
         logging.info("Envío client_isn num: {}".format(self.seqNum))
-        self.socket.settimeout(TIMEOUT)
+        self.socket.settimeout(RECV_TIMEOUT)
         synAckPacket, addr = (None, None)
         receivedSYNACK = False
         tries = NRETRIES
@@ -197,7 +197,7 @@ class RDTSocketSW:
     def createConnection(self, clientAddress, initialAckNum):
         newConnection = RDTSocketSW()
         newConnection.bind(('', 0))
-        newConnection.socket.settimeout(TIMEOUT)
+        newConnection.socket.settimeout(RECV_TIMEOUT)
         newConnection.setDestinationAddress(clientAddress)
         newConnection.ackNum = initialAckNum
         newConnection.mainSocket = self
@@ -323,10 +323,14 @@ class RDTSocketSW:
 
             receivedSuccessfully = receivedPacket.seqNum == self.ackNum
             isCorrupt = receivedPacket.checksum != receivedPacket.calculateChecksum()
-            if(receivedSuccessfully and not isCorrupt):
+            if(receivedSuccessfully and not isCorrupt): # and not isCorrupt
                 self.ackNum += len(receivedPacket.data)
             responsePacket = RDTPacket.makeACKPacket(self.ackNum)
             self._send(responsePacket)
+
+            if(receivedPacket.isFIN()):
+                logging.info("Received FIN packet")
+                return b''
         return receivedPacket.data
 
     def sendFIN(self):

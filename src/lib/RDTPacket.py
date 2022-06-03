@@ -32,7 +32,7 @@ class RDTPacket:
     # https://stackoverflow.com/questions/3753589/packing-and-unpacking-variable-length-array-string-using-the-struct-module-in-py
     @classmethod
     def fromSerializedPacket(cls, serializedPacket):
-        packet = struct.unpack("i i i ? ? ? ", serializedPacket[:RDT_HEADER_LENGTH])
+        packet = struct.unpack("i i i ? ? ?", serializedPacket[:RDT_HEADER_LENGTH])
         packet = (*packet, serializedPacket[RDT_HEADER_LENGTH:])
         return cls(*packet)
 
@@ -64,7 +64,7 @@ class RDTPacket:
         return cls(seqNum, ackNum, None, False, True, True)
 
     def serialize(self):
-        return struct.pack("i i i ? ? ?  {}s".format(len(
+        return struct.pack("i i i ? ? ? {}s".format(len(
             self.data)), self.seqNum, self.ackNum, self.checksum, self.syn, self.ack, self.fin, self.data)
 
     def carryAroundAdd(self, a, b):
@@ -76,7 +76,7 @@ class RDTPacket:
         serializedFields = struct.pack("i i ? ? ? {}s".format(len(
             self.data)), self.seqNum, self.ackNum, self.syn, self.ack, self.fin, self.data)
 
-        if(len(serializedFields) % 2 != 0):  # Agrego 1 byte de padding si el numero de bytes es impar 
+        if(len(serializedFields) % 2 != 0):  # Agrego 1 byte de padding si el numero de bytes es impar
             serializedFields += struct.pack("B", 0) 
 
         if(len(serializedFields) % 2 == 0):  # Divido en numeros de 16 bits
