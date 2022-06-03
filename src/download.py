@@ -8,7 +8,7 @@ import os
 from lib.exceptions import ServerUnreachable, LostConnection
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
-from pyrsistent import optional
+import time
 
 RDT_SR = 1
 RDT_SW = 2
@@ -109,8 +109,12 @@ try:
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
     if responsePacket.type == FileTransfer.OK:
+        startTime = time.time_ns()
         FileTransfer.recv_file(client_socket, (1,1), args.dst)
+        finishTime = time.time_ns()
 
+        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
     if responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info(" The file you are trying to access is currently busy")
         client_socket.closeReceiver()

@@ -6,8 +6,7 @@ import struct
 import os
 from pathlib import Path
 
-from lib.RDTSocketSR import RDTSocketSR, RDTHEADER
-
+from lib.RDTSocketSR import RDTSocketSR, RDT_HEADER_LENGTH
 
 class Packet:
     type = 0
@@ -41,7 +40,7 @@ class FileTransfer:
     BUSY_FILE = 4
     MSS = 1500
 
-    PAYLOAD = MSS - RDTHEADER
+    PAYLOAD = MSS - RDT_HEADER_LENGTH
     CONFIG_LEN = 209
 
     #   Esta funcion lee los paquetes que llegan por el socket y

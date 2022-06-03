@@ -3,6 +3,7 @@ from socket import socket, AF_INET, SOCK_STREAM
 from FileTransfer import FileTransfer, Packet
 import logging
 from lib.exceptions import ServerUnreachable, LostConnection
+import time
 import sys
 from lib.RDTSocketSR import RDTSocketSR
 from lib.RDTSocketSW import RDTSocketSW
@@ -112,7 +113,14 @@ try:
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
 
     if responsePacket.type == FileTransfer.OK:
+        startTime = time.time_ns()
         FileTransfer.send_ofile(client_socket, (1,1), f)
+
+        finishTime = time.time_ns()
+
+        elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
+        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
+
     else: # responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
         f.close()
