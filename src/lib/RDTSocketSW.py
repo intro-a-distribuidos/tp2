@@ -148,10 +148,16 @@ class RDTSocketSW:
     """
 
     def listenThread(self, maxQueuedConnections):
-        # si está llena acceptedConnections deberíamos quedarnos en un while
+        # TODO?: si está llena acceptedConnections deberíamos quedarnos en un while
         # esperando que se vacíe, no hacer otra cosa
+        self.socket.settimeout(1)
+        data, address = (None, None)
+
         while(self.listening):
-            data, address = self.socket.recvfrom(MSS)
+            try:
+                data, address = self.socket.recvfrom(MSS)
+            except timeout:
+                continue  # Checks while condition again
             packet = RDTPacket.fromSerializedPacket(data)
 
             if(packet.isSYN() and self.isNewClient(address)):
@@ -160,7 +166,7 @@ class RDTSocketSW:
                         *address))
                 if(self.getAmountOfPendingConnections() >= maxQueuedConnections):
                     logging.info(
-                        "Requested connection [{}:{}] refused".format(
+                        "Refused connection from [{}:{}] due pending connections overflow".format(
                             *address))
                     continue  # Descarto las solicitudes de conexiones TODO: enviar mensaje de rechazo
 
@@ -175,21 +181,22 @@ class RDTSocketSW:
                     newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
                 self.socket.sendto(synAckPacket.serialize(), address)
 
-                logging.info(
-                    "Sent server sequence number: {} y ACK number {}".format(
+                logging.debug(
+                    "Sent server Sequence number: {} y ACK number {}".format(
                         newConnection.seqNum, newConnection.ackNum))
 
             elif(packet.isSYN() and not self.isNewClient(address)):
-                logging.info(
-                    "Requested connection from [{}:{}] already connected".format(
+                logging.debug(
+                    "Requested connection from [{}:{}], wich is already connected".format(
                         *address))
                 newConnection = self.getClient(address)
                 synAckPacket = RDTPacket.makeSYNACKPacket(
                     newConnection.seqNum, newConnection.ackNum, newConnection.srcPort)
                 self.socket.sendto(synAckPacket.serialize(), address)
-                logging.info(
+                logging.debug(
                     "Resending SYNACK server sequence number: {} y ACK number {}".format(
                         newConnection.seqNum, newConnection.ackNum))
+
     """
         Lo ejecuta el servidor para crear un socket nuevo para la comunicación con el cliente
     """
@@ -404,6 +411,7 @@ class RDTSocketSW:
         logging.info("Socket closed...")
 
     def closeServer(self):
+        self.listening = False
         if(self.listeningThread):
             self.listeningThread.join()
 
