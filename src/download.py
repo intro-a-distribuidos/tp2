@@ -111,7 +111,7 @@ try:
     client_socket.connect((args.host, args.port))
 
     # we want to download a file
-    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name, 0)
+    FileTransfer.request(client_socket, FileTransfer.RECEIVE, args.name)
 
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())

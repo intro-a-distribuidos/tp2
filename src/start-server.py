@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 import os
+import time
 
 from FileTransfer import FileTransfer, Packet
 from threading import Thread, Lock
@@ -120,8 +121,7 @@ def client_handle(connSocket, addr):
         return
 
     packet = Packet.fromSerializedPacket(bytes)
-    file_size = packet.size
-    file_name = packet.name.decode()
+    file_name = packet.data.decode()
     logging.info(
         "Client({}:{}) want to {} a file named \"{}\"".format(
             addr[0],
@@ -133,7 +133,7 @@ def client_handle(connSocket, addr):
     lockOpenFiles.acquire()
     if file_name in openFiles:
         logging.info("Client({}:{}) want to use a busy file, sending error".format(*addr))
-        FileTransfer.request(connSocket,FileTransfer.BUSY_FILE,file_name,0)
+        FileTransfer.request(connSocket,FileTransfer.BUSY_FILE,file_name)
         lockOpenFiles.release()
         connSocket.closeReceiver()
         return
@@ -141,14 +141,14 @@ def client_handle(connSocket, addr):
         file = open(args.storage + '/' + file_name, 'rb' if packet.type == FileTransfer.RECEIVE else 'wb')
     except:
         logging.debug("Client({}:{}) Cannot open the file \"{}\"".format(addr[0], addr[1], args.storage + '/' + file_name))
-        FileTransfer.request(connSocket,FileTransfer.ERROR, file_name, 0)
+        FileTransfer.request(connSocket,FileTransfer.ERROR, file_name)
         lockOpenFiles.release()
         connSocket.closeReceiver()
         return
 
     openFiles.append(file_name)
     logging.info("Client({}:{}) beginning transaction".format(*addr))
-    FileTransfer.request(connSocket,FileTransfer.OK,file_name,0)
+    FileTransfer.request(connSocket,FileTransfer.OK,file_name)
     lockOpenFiles.release()
 
     if packet.type == FileTransfer.RECEIVE:
@@ -162,7 +162,7 @@ def client_handle(connSocket, addr):
             logging.info("Client({}:{}) Lost connection".format(*addr))
             connSocket.closeReceiver()
 
-    elif packet.type == FileTransfer.SEND:  # and packet.size < 4GB
+    elif packet.type == FileTransfer.SEND:
         # If the client want to send a file, then the server receive packets
         connections.append((connSocket,FileTransfer.RECEIVE))
         try:

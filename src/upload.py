@@ -106,7 +106,7 @@ try:
     client_socket.connect((args.host, args.port))
 
     # we want to upload a file
-    FileTransfer.request(client_socket, FileTransfer.SEND, args.name, 0)
+    FileTransfer.request(client_socket, FileTransfer.SEND, args.name)
 
     # server responses if the query was accepted
     responsePacket = Packet.fromSerializedPacket(client_socket.recv())
@@ -118,7 +118,7 @@ try:
         finishTime = time.time_ns()
 
         elapsedTime = (finishTime - startTime) / 1000000 # Convert ns to ms
-        logging.debug("Finished downloading the file in {:.0f}ms".format(elapsedTime))
+        logging.debug("Finished uploading the file in {:.0f}ms".format(elapsedTime))
 
     else: # responsePacket.type == FileTransfer.BUSY_FILE:
         logging.info("The file you are trying to access is currently busy")
